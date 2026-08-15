@@ -76,6 +76,8 @@ jobs:
         run: |
           docker run --rm fetchharbor:runtime python -c \
             "from importlib.metadata import version; assert tuple(map(int, version('msgpack').split('.'))) >= (1, 2, 1); assert tuple(map(int, version('setuptools').split('.'))) >= (78, 1, 1)"
+          docker run --rm fetchharbor:runtime sh -c \
+            "test ! -e /usr/local/lib/python3.12/site-packages/msgpack-1.1.2.dist-info && test ! -e /usr/local/lib/python3.12/site-packages/setuptools-70.3.0.dist-info"
 
       - name: Scan runtime image
         uses: aquasecurity/trivy-action@v0.36.0
