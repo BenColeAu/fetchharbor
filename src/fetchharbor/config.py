@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +19,21 @@ class Settings(BaseSettings):
     price_pdf_parse_usdc: str = "0.01"
     max_download_bytes: int = 20 * 1024 * 1024
     request_timeout_seconds: float = 30
+    admin_enabled: bool = False
+    admin_token: str = ""
+    admin_token_file: Path | None = None
+    admin_config_path: Path = Path("data/admin-config.json")
+    audit_log_path: Path = Path("data/admin-audit.jsonl")
+    security_headers_enabled: bool = True
+    allowed_hosts: str = "localhost,127.0.0.1,testserver"
+
+    def resolved_admin_token(self) -> str:
+        if self.admin_token_file:
+            return self.admin_token_file.read_text(encoding="utf-8").strip()
+        return self.admin_token
+
+    def trusted_hosts(self) -> list[str]:
+        return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
 
     def service_price(self, service_name: str, default: str) -> str:
         key = service_name.replace("-", "_")

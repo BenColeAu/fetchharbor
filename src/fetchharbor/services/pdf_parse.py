@@ -1,13 +1,12 @@
 from io import BytesIO
 
-import httpx
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, HttpUrl
 from pypdf import PdfReader
 
 from ..config import get_settings
 from ..registry import ServiceDefinition
-from .scrape import _validate_public_url
+from .scrape import fetch_bytes
 
 router = APIRouter()
 
@@ -27,14 +26,8 @@ def parse_pdf(data: bytes) -> dict:
 
 
 async def download(url: str) -> bytes:
-    _validate_public_url(url)
-    settings = get_settings()
-    async with httpx.AsyncClient(follow_redirects=True, timeout=settings.request_timeout_seconds) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-    if len(response.content) > settings.max_download_bytes:
-        raise HTTPException(413, "PDF is too large")
-    return response.content
+    _, data = await fetch_bytes(url)
+    return data
 
 
 @router.get("/pdf-parse")
@@ -59,4 +52,3 @@ definition = ServiceDefinition(
     input_schema={"type": "object", "properties": {"url": {"type": "string", "format": "uri"}}},
     output_example={"status": "success", "text": "...", "page_count": 1, "character_count": 3},
 )
-

@@ -1,6 +1,6 @@
 import ipaddress
 import socket
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
@@ -28,18 +28,34 @@ def _validate_public_url(url: str) -> None:
         raise HTTPException(400, "Private and local network targets are blocked")
 
 
-async def fetch(url: str) -> dict:
-    _validate_public_url(url)
+async def fetch_bytes(url: str) -> tuple[httpx.Response, bytes]:
     settings = get_settings()
-    async with httpx.AsyncClient(follow_redirects=True, timeout=settings.request_timeout_seconds) as client:
-        async with client.stream("GET", url, headers={"User-Agent": "FetchHarbor/0.1"}) as response:
-            response.raise_for_status()
-            body = bytearray()
-            async for chunk in response.aiter_bytes():
-                body.extend(chunk)
-                if len(body) > settings.max_download_bytes:
-                    raise HTTPException(413, "Remote response is too large")
-    text = bytes(body).decode(response.encoding or "utf-8", errors="replace")
+    current_url = url
+    async with httpx.AsyncClient(follow_redirects=False, timeout=settings.request_timeout_seconds) as client:
+        for _ in range(6):
+            _validate_public_url(current_url)
+            async with client.stream("GET", current_url, headers={"User-Agent": "FetchHarbor/0.1"}) as response:
+                if response.is_redirect:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise HTTPException(502, "Remote redirect has no location")
+                    current_url = urljoin(str(response.url), location)
+                    continue
+                response.raise_for_status()
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > settings.max_download_bytes:
+                        raise HTTPException(413, "Remote response is too large")
+                break
+        else:
+            raise HTTPException(508, "Too many remote redirects")
+    return response, bytes(body)
+
+
+async def fetch(url: str) -> dict:
+    response, raw = await fetch_bytes(url)
+    text = raw.decode(response.encoding or "utf-8", errors="replace")
     return {"status": "success", "url": str(response.url), "status_code": response.status_code, "content_type": response.headers.get("content-type"), "content": text}
 
 
@@ -58,4 +74,3 @@ definition = ServiceDefinition(
     input_schema={"type": "object", "properties": {"url": {"type": "string", "format": "uri"}}, "required": ["url"], "additionalProperties": False},
     output_example={"status": "success", "url": "https://example.com", "status_code": 200, "content": "..."},
 )
-

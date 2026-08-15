@@ -54,3 +54,9 @@ The committed `.env.example` uses only inert placeholders. Operators copy it to 
 ## Operations
 
 The API container runs as an unprivileged user with a read-only filesystem, health check, restart policy, CPU/memory boundaries, and an isolated internal network. Ollama is never published to the host by default.
+
+## Admin control plane
+
+Set `FETCHHARBOR_ADMIN_ENABLED=true`, supply a strong token (preferably with `FETCHHARBOR_ADMIN_TOKEN_FILE`), and open `/admin`. The consolidated dashboard provides process/host and per-route monitoring, editable allow-listed runtime settings, service pricing, security posture checks, and a payload-free configuration audit trail.
+
+Admin is disabled by default. Do not publish it directly to the internet; place it behind a VPN, private ingress, or an additional identity-aware proxy. See [PRODUCTION.md](PRODUCTION.md) for release blockers and deployment requirements.

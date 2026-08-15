@@ -1,0 +1,71 @@
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import Lock
+from typing import Any
+
+from pydantic import BaseModel, Field, HttpUrl
+
+from ..config import Settings
+
+
+class AdminConfiguration(BaseModel):
+    public_url: HttpUrl | None = None
+    payment_mode: str | None = Field(default=None, pattern="^(disabled|x402)$")
+    price_scrape_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
+    price_html_to_md_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
+    price_pdf_parse_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
+    max_download_bytes: int | None = Field(default=None, ge=1024, le=100 * 1024 * 1024)
+    request_timeout_seconds: float | None = Field(default=None, ge=1, le=300)
+    security_headers_enabled: bool | None = None
+
+
+EDITABLE_FIELDS = set(AdminConfiguration.model_fields)
+
+
+class ConfigurationStore:
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.path = Path(settings.admin_config_path)
+        self.audit_path = Path(settings.audit_log_path)
+        self._lock = Lock()
+        self.apply(self._read())
+
+    def _read(self) -> dict[str, Any]:
+        if not self.path.exists():
+            return {}
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+    def current(self) -> dict[str, Any]:
+        return {field: str(getattr(self.settings, field)) if field == "public_url" else getattr(self.settings, field) for field in EDITABLE_FIELDS}
+
+    def apply(self, values: dict[str, Any]) -> None:
+        for key, value in values.items():
+            if key in EDITABLE_FIELDS and value is not None:
+                setattr(self.settings, key, value)
+
+    def update(self, configuration: AdminConfiguration, actor: str) -> dict[str, Any]:
+        changes = configuration.model_dump(exclude_none=True, mode="json")
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            current = self._read()
+            current.update(changes)
+            temporary = self.path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(current, indent=2), encoding="utf-8")
+            temporary.replace(self.path)
+            self.apply(changes)
+            self._audit(actor, changes)
+        return self.current()
+
+    def _audit(self, actor: str, changes: dict[str, Any]) -> None:
+        self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+        event = {"at": datetime.now(UTC).isoformat(), "actor": actor, "action": "configuration.update", "fields": sorted(changes)}
+        with self.audit_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event) + "\n")
+
+    def audit_events(self, limit: int = 50) -> list[dict[str, Any]]:
+        if not self.audit_path.exists():
+            return []
+        lines = self.audit_path.read_text(encoding="utf-8").splitlines()[-limit:]
+        return [json.loads(line) for line in reversed(lines)]
+
