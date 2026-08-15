@@ -1,7 +1,9 @@
 name: fetchharbor
 services:
   api:
-    build: .
+    build:
+      context: .
+      target: runtime
     env_file: [.env]
     ports: ["${FETCHHARBOR_PORT:-8080}:8080"]
     volumes: ["fetchharbor-data:/app/data"]
@@ -26,6 +28,7 @@ services:
   mcp:
     build:
       context: .
+      target: runtime
     profiles: ["mcp"]
     command: ["python", "-m", "fetchharbor.integrations.mcp_server"]
     env_file: [.env]
