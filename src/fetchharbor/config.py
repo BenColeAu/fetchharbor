@@ -64,7 +64,9 @@ class Settings(BaseSettings):
             try:
                 token = self.resolved_admin_token()
             except OSError as exc:
-                raise ValueError("production admin credential could not be read") from exc
+                raise ValueError(
+                    "production admin credential could not be read"
+                ) from exc
             if len(token) < 32:
                 raise ValueError(
                     "production admin requires a credential of at least 32 characters"
