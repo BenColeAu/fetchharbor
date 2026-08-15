@@ -72,10 +72,17 @@ jobs:
             -v "${PWD}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile
 
+      - name: Confirm patched runtime package versions
+        run: |
+          docker run --rm fetchharbor:runtime python -c \
+            "from importlib.metadata import version; assert tuple(map(int, version('msgpack').split('.'))) >= (1, 2, 1); assert tuple(map(int, version('setuptools').split('.'))) >= (78, 1, 1)"
+
       - name: Scan runtime image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: fetchharbor:runtime
+          version: v0.72.0
+          cache: false
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
