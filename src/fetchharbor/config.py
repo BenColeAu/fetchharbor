@@ -60,6 +60,17 @@ class Settings(BaseSettings):
             raise ValueError(
                 "production outbound proxy enforcement is enabled but no proxy URL is configured"
             )
+        if self.env == "production" and self.admin_enabled:
+            try:
+                token = self.resolved_admin_token()
+            except OSError as exc:
+                raise ValueError(
+                    "production admin credential could not be read"
+                ) from exc
+            if len(token) < 32:
+                raise ValueError(
+                    "production admin requires a credential of at least 32 characters"
+                )
         return self
 
     def resolved_admin_token(self) -> str:

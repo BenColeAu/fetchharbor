@@ -23,6 +23,11 @@ class AdminConfiguration(BaseModel):
 
 
 EDITABLE_FIELDS = set(AdminConfiguration.model_fields)
+RESTART_REQUIRED_FIELDS = {
+    "price_scrape_usdc",
+    "price_html_to_md_usdc",
+    "price_pdf_parse_usdc",
+}
 
 
 class ConfigurationStore:
@@ -39,12 +44,17 @@ class ConfigurationStore:
         return json.loads(self.path.read_text(encoding="utf-8"))
 
     def current(self) -> dict[str, Any]:
-        return {
+        current = {
             field: str(getattr(self.settings, field))
             if field == "public_url"
             else getattr(self.settings, field)
             for field in EDITABLE_FIELDS
         }
+        persisted = self._read()
+        for field in RESTART_REQUIRED_FIELDS:
+            if field in persisted:
+                current[field] = persisted[field]
+        return current
 
     def apply(self, values: dict[str, Any]) -> None:
         for key, value in values.items():
@@ -60,9 +70,17 @@ class ConfigurationStore:
             temporary = self.path.with_suffix(".tmp")
             temporary.write_text(json.dumps(current, indent=2), encoding="utf-8")
             temporary.replace(self.path)
-            self.apply(changes)
+            live_changes = {
+                key: value
+                for key, value in changes.items()
+                if key not in RESTART_REQUIRED_FIELDS
+            }
+            self.apply(live_changes)
             self._audit(actor, changes)
-        return self.current()
+        return {
+            "configuration": self.current(),
+            "restart_required": sorted(RESTART_REQUIRED_FIELDS.intersection(changes)),
+        }
 
     def _audit(self, actor: str, changes: dict[str, Any]) -> None:
         self.audit_path.parent.mkdir(parents=True, exist_ok=True)

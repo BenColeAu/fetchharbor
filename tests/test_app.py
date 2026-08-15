@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from fetchharbor.admin.store import AdminConfiguration, ConfigurationStore
 from fetchharbor.config import Settings
 from fetchharbor.main import app, settings
 
@@ -27,6 +28,15 @@ def test_production_proxy_guard_fails_closed() -> None:
         assert "proxy" in str(exc)
     else:
         raise AssertionError("production accepted a missing required proxy")
+
+
+def test_production_admin_rejects_weak_token() -> None:
+    try:
+        Settings(env="production", admin_enabled=True, admin_token="too-short")
+    except ValueError as exc:
+        assert "admin" in str(exc)
+    else:
+        raise AssertionError("production accepted a weak admin credential")
 
 
 def test_health() -> None:
@@ -88,3 +98,35 @@ def test_security_headers_are_applied() -> None:
     response = client.get("/health")
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_price_update_is_deferred_until_restart(tmp_path) -> None:
+    config_path = tmp_path / "admin-config.json"
+    configured = Settings(
+        admin_config_path=config_path,
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+    )
+    store = ConfigurationStore(configured)
+    result = store.update(AdminConfiguration(price_scrape_usdc="0.25"), "test")
+
+    assert configured.price_scrape_usdc == "0.01"
+    assert result["configuration"]["price_scrape_usdc"] == "0.25"
+    assert result["restart_required"] == ["price_scrape_usdc"]
+
+    restarted = Settings(
+        admin_config_path=config_path,
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+    )
+    ConfigurationStore(restarted)
+    assert restarted.price_scrape_usdc == "0.25"
+
+
+def test_admin_dashboard_escapes_dynamic_values() -> None:
+    previous_enabled = settings.admin_enabled
+    settings.admin_enabled = True
+    try:
+        response = client.get("/admin")
+        assert "const esc=" in response.text
+        assert "${esc(c.public_url)}" in response.text
+    finally:
+        settings.admin_enabled = previous_enabled

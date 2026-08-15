@@ -70,7 +70,8 @@ jobs:
             -e FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
             -e FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             -v "${PWD}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile
+            caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d \
+            caddy validate --config /etc/caddy/Caddyfile
 
       - name: Confirm patched runtime package versions
         run: |
@@ -146,6 +147,7 @@ jobs:
         run: |
           docker compose ps
           test "$(docker inspect --format '{{.State.Health.Status}}' fetchharbor-api-1)" = 'healthy'
+          docker exec fetchharbor-api-1 test -w /app/data
 
       - name: Show logs after failure
         if: failure()
