@@ -4,7 +4,8 @@ WORKDIR /app
 RUN groupadd --system fetchharbor && useradd --system --gid fetchharbor --home /app fetchharbor
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN pip install --no-cache-dir .
+RUN python -m pip install --no-cache-dir --upgrade 'pip>=26.1.2,<27' \
+    && pip install --no-cache-dir .
 USER fetchharbor
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"
