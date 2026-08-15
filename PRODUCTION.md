@@ -31,3 +31,5 @@ Never commit `.env`. Prefer Compose secrets or an external secret manager. The a
 ## Release gate
 
 A production release should require passing unit/integration tests, a real testnet verify-and-settle test for every paid route, container build and health-check validation, dependency and image scanning, reverse-proxy/TLS validation, backup restoration, and a rollback exercise.
+
+The `x402 Testnet Settlement` workflow is manual and uses the protected `x402-testnet` GitHub environment. Add a dedicated Base Sepolia wallet private key as the `EVM_PRIVATE_KEY` environment secret. The workflow derives only its public address, starts FetchHarbor with the wallet as the test recipient, proves the unpaid challenge, performs a signed payment, and requires a successful settlement receipt. Never reuse a mainnet-funded wallet for this test.
