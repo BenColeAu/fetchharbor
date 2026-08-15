@@ -1,4 +1,7 @@
-from fastapi import FastAPI, Request
+import tempfile
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from .admin.metrics import metrics, monitoring_middleware
@@ -60,6 +63,18 @@ async def liveness() -> dict:
 
 @app.get("/health/ready", include_in_schema=False)
 async def readiness() -> dict:
+    checked: set[Path] = set()
+    for configured_path in (settings.admin_config_path, settings.audit_log_path):
+        directory = Path(configured_path).parent.resolve()
+        if directory in checked:
+            continue
+        checked.add(directory)
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=directory):
+                pass
+        except OSError as exc:
+            raise HTTPException(503, "Persistent storage is not writable") from exc
     return {"status": "ready", "services": len(registry.services)}
 
 

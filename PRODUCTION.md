@@ -9,7 +9,7 @@ FetchHarbor has a lean hardened deployment path, but mainnet payment readiness s
 3. Use `compose.production.yaml` or an equivalent trusted TLS proxy. Do not expose Uvicorn directly to the internet.
 4. Set `FETCHHARBOR_ALLOWED_HOSTS` to the real public hostname and restrict trusted forwarded-header sources at the process or network boundary.
 5. Enable admin only on a private network, VPN, or separately protected hostname. Mount the admin credential as a Docker secret and set `FETCHHARBOR_ADMIN_TOKEN_FILE` to its path. Use at least 32 random characters.
-6. Pin production container images to reviewed immutable digests, including Ollama. The example uses `latest` only as a development convenience.
+6. Keep production container images pinned to reviewed immutable digests. Refresh the tag and digest together through a reviewed dependency-update process.
 7. Run vulnerability and dependency scans in CI, back up the data volume, test restoration, and connect optional external alerting if needed.
 
 ## Scaling limitations
@@ -32,4 +32,8 @@ Never commit `.env`. Prefer Compose secrets or an external secret manager. The a
 
 A production release should require passing unit/integration tests, a real testnet verify-and-settle test for every paid route, container build and health-check validation, dependency and image scanning, reverse-proxy/TLS validation, backup restoration, and a rollback exercise.
 
-The `x402 Testnet Settlement` workflow is manual and uses the protected `x402-testnet` GitHub environment. Add a dedicated Base Sepolia wallet private key as the `EVM_PRIVATE_KEY` environment secret. The workflow derives only its public address, starts FetchHarbor with the wallet as the test recipient, proves the unpaid challenge, performs a signed payment, and requires a successful settlement receipt. Never reuse a mainnet-funded wallet for this test.
+The `x402 Testnet Settlement` workflow is manual and uses the protected `x402-testnet` GitHub environment. Add a dedicated Base Sepolia wallet private key as the `EVM_PRIVATE_KEY` environment secret and its public address as the `EVM_WALLET_ADDRESS` environment variable. The workflow verifies that they match, starts FetchHarbor with the wallet as the test recipient, proves the unpaid challenge, performs a signed payment, and requires a successful settlement receipt. Never reuse a mainnet-funded wallet for this test.
+
+## Deferred deployment validation
+
+The automated gates do not replace host-specific release work. Before accepting production traffic, the operator must still test the actual domain and TLS renewal, VM firewall rules, backup restoration and rollback. Mainnet network, asset, receiving-wallet and authenticated-facilitator configuration—and a deliberately limited-value mainnet settlement—remain separate release approvals.
