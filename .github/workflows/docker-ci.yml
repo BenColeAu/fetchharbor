@@ -79,10 +79,19 @@ jobs:
           docker run --rm fetchharbor:runtime sh -c \
             "test ! -e /usr/local/lib/python3.12/site-packages/msgpack-1.1.2.dist-info && test ! -e /usr/local/lib/python3.12/site-packages/setuptools-70.3.0.dist-info"
 
-      - name: Scan runtime image
+      - name: Export final runtime filesystem
+        run: |
+          set -euo pipefail
+          container_id="$(docker create fetchharbor:runtime)"
+          trap 'docker rm -f "${container_id}" >/dev/null 2>&1 || true' EXIT
+          mkdir runtime-rootfs
+          docker export "${container_id}" | tar -x -C runtime-rootfs
+
+      - name: Scan final runtime filesystem
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: fetchharbor:runtime
+          scan-type: rootfs
+          scan-ref: runtime-rootfs
           version: v0.72.0
           cache: false
           format: table
