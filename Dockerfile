@@ -4,7 +4,7 @@ WORKDIR /app
 RUN groupadd --system fetchharbor && useradd --system --gid fetchharbor --home /app fetchharbor
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN python -m pip install --no-cache-dir --upgrade 'pip>=26.1.2,<27' \
+RUN python -m pip install --no-cache-dir --upgrade 'pip>=26.1.2,<27' 'setuptools>=78.1.1' \
     && pip install --no-cache-dir .
 USER fetchharbor
 EXPOSE 8080
