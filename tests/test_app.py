@@ -1,8 +1,14 @@
 from fastapi.testclient import TestClient
 
+from fetchharbor.config import Settings
 from fetchharbor.main import app, settings
 
 client = TestClient(app)
+
+
+def test_empty_admin_token_file_uses_inline_token() -> None:
+    configured = Settings(admin_token="inline-token", admin_token_file="")
+    assert configured.resolved_admin_token() == "inline-token"
 
 
 def test_health() -> None:

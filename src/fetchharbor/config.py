@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     audit_log_path: Path = Path("data/admin-audit.jsonl")
     security_headers_enabled: bool = True
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
+
+    @field_validator("admin_token_file", mode="before")
+    @classmethod
+    def empty_admin_token_file_is_unset(cls, value):
+        return None if value in (None, "") else value
 
     @model_validator(mode="after")
     def reject_unimplemented_payment_enforcement(self) -> "Settings":
