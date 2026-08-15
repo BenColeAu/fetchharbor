@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fetchharbor"
+version = "0.1.0"
+description = "A modular, self-hosted x402 content service platform"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "markdownify>=1.2,<2",
+  "pydantic-settings>=2.10,<3",
+  "pypdf>=6,<7",
+  "python-multipart>=0.0.20,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.4,<9", "pytest-asyncio>=1.1,<2"]
+mcp = ["mcp>=1.13,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fetchharbor"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+

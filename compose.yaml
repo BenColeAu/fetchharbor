@@ -1,0 +1,41 @@
+name: fetchharbor
+services:
+  api:
+    build: .
+    env_file: [.env]
+    ports: ["${FETCHHARBOR_PORT:-8080}:8080"]
+    volumes: ["fetchharbor-data:/app/data"]
+    restart: unless-stopped
+    mem_limit: 2g
+    mem_reservation: 512m
+    cpus: 2
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    networks: [edge, internal]
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    volumes: ["ollama-data:/root/.ollama"]
+    restart: unless-stopped
+    networks: [internal]
+
+  mcp:
+    build:
+      context: .
+    profiles: ["mcp"]
+    command: ["python", "-m", "fetchharbor.integrations.mcp_server"]
+    env_file: [.env]
+    restart: unless-stopped
+    networks: [internal]
+
+networks:
+  edge: {}
+  internal:
+    internal: true
+
+volumes:
+  fetchharbor-data: {}
+  ollama-data: {}
+
