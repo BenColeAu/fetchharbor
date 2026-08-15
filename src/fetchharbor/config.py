@@ -2,11 +2,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="FETCHHARBOR_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="FETCHHARBOR_", env_file=".env", extra="ignore"
+    )
     env: Literal["development", "test", "production"] = "development"
     public_url: str = "http://localhost:8080"
     payment_mode: Literal["disabled", "x402"] = "disabled"
@@ -26,6 +29,14 @@ class Settings(BaseSettings):
     audit_log_path: Path = Path("data/admin-audit.jsonl")
     security_headers_enabled: bool = True
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
+
+    @model_validator(mode="after")
+    def reject_unimplemented_payment_enforcement(self) -> "Settings":
+        if self.payment_mode == "x402":
+            raise ValueError(
+                "x402 payment enforcement is not implemented; keep payment mode disabled"
+            )
+        return self
 
     def resolved_admin_token(self) -> str:
         if self.admin_token_file:

@@ -1,4 +1,5 @@
 from io import BytesIO
+from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, HttpUrl
@@ -22,7 +23,12 @@ def parse_pdf(data: bytes) -> dict:
     except Exception as exc:
         raise HTTPException(422, "Invalid or unsupported PDF") from exc
     text = "\n\n".join(pages)
-    return {"status": "success", "text": text, "page_count": len(pages), "character_count": len(text)}
+    return {
+        "status": "success",
+        "text": text,
+        "page_count": len(pages),
+        "character_count": len(text),
+    }
 
 
 async def download(url: str) -> bytes:
@@ -36,7 +42,10 @@ async def pdf_get(url: str = Query()) -> dict:
 
 
 @router.post("/pdf-parse")
-async def pdf_post(url: str | None = Query(default=None), file: UploadFile | None = File(default=None)) -> dict:
+async def pdf_post(
+    url: Annotated[str | None, Query()] = None,
+    file: Annotated[UploadFile | None, File()] = None,
+) -> dict:
     if url:
         return parse_pdf(await download(url))
     if file:
@@ -48,7 +57,19 @@ async def pdf_post(url: str | None = Query(default=None), file: UploadFile | Non
 
 
 definition = ServiceDefinition(
-    name="pdf-parse", path="/pdf-parse", price_usdc="0.01", description="Extract text from a PDF URL or upload.", router=router,
-    input_schema={"type": "object", "properties": {"url": {"type": "string", "format": "uri"}}},
-    output_example={"status": "success", "text": "...", "page_count": 1, "character_count": 3},
+    name="pdf-parse",
+    path="/pdf-parse",
+    price_usdc="0.01",
+    description="Extract text from a PDF URL or upload.",
+    router=router,
+    input_schema={
+        "type": "object",
+        "properties": {"url": {"type": "string", "format": "uri"}},
+    },
+    output_example={
+        "status": "success",
+        "text": "...",
+        "page_count": 1,
+        "character_count": 3,
+    },
 )

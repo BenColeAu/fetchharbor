@@ -14,4 +14,4 @@ FROM runtime AS test
 USER root
 COPY tests ./tests
 RUN pip install --no-cache-dir '.[test]'
-CMD ["pytest", "-q"]
+CMD ["sh", "-c", "ruff check src tests && ruff format --check src tests && pytest -q"]

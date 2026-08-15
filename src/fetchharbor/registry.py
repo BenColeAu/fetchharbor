@@ -1,5 +1,6 @@
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from fastapi import APIRouter
 
@@ -32,5 +33,13 @@ class ServiceRegistry:
         return tuple(self._services.values())
 
     def catalog(self) -> list[dict[str, Any]]:
-        return [{"name": s.name, "path": s.path, "methods": s.methods, "price_usdc": s.price_usdc, "description": s.description} for s in self.services]
-
+        return [
+            {
+                "name": s.name,
+                "path": s.path,
+                "methods": s.methods,
+                "price_usdc": s.price_usdc,
+                "description": s.description,
+            }
+            for s in self.services
+        ]

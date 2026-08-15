@@ -13,7 +13,12 @@ class HtmlRequest(BaseModel):
 
 def convert(html: str) -> dict:
     result = markdownify(html, heading_style="ATX").strip()
-    return {"status": "success", "markdown": result, "character_count": len(result), "truncated": False}
+    return {
+        "status": "success",
+        "markdown": result,
+        "character_count": len(result),
+        "truncated": False,
+    }
 
 
 @router.get("/html-to-md")
@@ -27,9 +32,21 @@ async def html_to_md_post(request: HtmlRequest) -> dict:
 
 
 definition = ServiceDefinition(
-    name="html-to-md", path="/html-to-md", price_usdc="0.005",
-    description="Convert HTML into cleaned Markdown.", router=router,
-    input_schema={"type": "object", "properties": {"html": {"type": "string"}}, "required": ["html"], "additionalProperties": False},
-    output_example={"status": "success", "markdown": "# Hello", "character_count": 7, "truncated": False},
+    name="html-to-md",
+    path="/html-to-md",
+    price_usdc="0.005",
+    description="Convert HTML into cleaned Markdown.",
+    router=router,
+    input_schema={
+        "type": "object",
+        "properties": {"html": {"type": "string"}},
+        "required": ["html"],
+        "additionalProperties": False,
+    },
+    output_example={
+        "status": "success",
+        "markdown": "# Hello",
+        "character_count": 7,
+        "truncated": False,
+    },
 )
-

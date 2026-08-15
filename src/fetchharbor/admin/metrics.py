@@ -33,15 +33,48 @@ class MetricsStore:
             metric.total_duration_ms += duration_ms
             metric.last_status = status
             metric.last_seen = time()
-            self._recent.append({"route": key, "status": status, "duration_ms": round(duration_ms, 2), "at": metric.last_seen})
+            self._recent.append(
+                {
+                    "route": key,
+                    "status": status,
+                    "duration_ms": round(duration_ms, 2),
+                    "at": metric.last_seen,
+                }
+            )
 
     def snapshot(self) -> dict:
         process = psutil.Process()
         memory = process.memory_info()
         with self._lock:
-            routes = [{"route": key, "requests": value.requests, "errors": value.errors, "average_duration_ms": round(value.total_duration_ms / value.requests, 2), "last_status": value.last_status, "last_seen": value.last_seen} for key, value in sorted(self._routes.items())]
+            routes = [
+                {
+                    "route": key,
+                    "requests": value.requests,
+                    "errors": value.errors,
+                    "average_duration_ms": round(
+                        value.total_duration_ms / value.requests, 2
+                    ),
+                    "last_status": value.last_status,
+                    "last_seen": value.last_seen,
+                }
+                for key, value in sorted(self._routes.items())
+            ]
             recent = list(reversed(self._recent))
-        return {"uptime_seconds": round(time() - self.started_at), "process": {"cpu_percent": process.cpu_percent(), "rss_bytes": memory.rss, "threads": process.num_threads()}, "host": {"cpu_percent": psutil.cpu_percent(), "memory_percent": psutil.virtual_memory().percent, "disk_percent": psutil.disk_usage("/").percent}, "routes": routes, "recent": recent}
+        return {
+            "uptime_seconds": round(time() - self.started_at),
+            "process": {
+                "cpu_percent": process.cpu_percent(),
+                "rss_bytes": memory.rss,
+                "threads": process.num_threads(),
+            },
+            "host": {
+                "cpu_percent": psutil.cpu_percent(),
+                "memory_percent": psutil.virtual_memory().percent,
+                "disk_percent": psutil.disk_usage("/").percent,
+            },
+            "routes": routes,
+            "recent": recent,
+        }
 
 
 metrics = MetricsStore()
@@ -55,4 +88,6 @@ async def monitoring_middleware(request: Request, call_next):
         status = response.status_code
         return response
     finally:
-        metrics.record(request.method, request.url.path, status, (monotonic() - started) * 1000)
+        metrics.record(
+            request.method, request.url.path, status, (monotonic() - started) * 1000
+        )

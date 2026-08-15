@@ -13,7 +13,9 @@ class AdminConfiguration(BaseModel):
     public_url: HttpUrl | None = None
     payment_mode: str | None = Field(default=None, pattern="^(disabled|x402)$")
     price_scrape_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
-    price_html_to_md_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
+    price_html_to_md_usdc: str | None = Field(
+        default=None, pattern=r"^\d+(\.\d{1,6})?$"
+    )
     price_pdf_parse_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
     max_download_bytes: int | None = Field(default=None, ge=1024, le=100 * 1024 * 1024)
     request_timeout_seconds: float | None = Field(default=None, ge=1, le=300)
@@ -37,7 +39,12 @@ class ConfigurationStore:
         return json.loads(self.path.read_text(encoding="utf-8"))
 
     def current(self) -> dict[str, Any]:
-        return {field: str(getattr(self.settings, field)) if field == "public_url" else getattr(self.settings, field) for field in EDITABLE_FIELDS}
+        return {
+            field: str(getattr(self.settings, field))
+            if field == "public_url"
+            else getattr(self.settings, field)
+            for field in EDITABLE_FIELDS
+        }
 
     def apply(self, values: dict[str, Any]) -> None:
         for key, value in values.items():
@@ -59,7 +66,12 @@ class ConfigurationStore:
 
     def _audit(self, actor: str, changes: dict[str, Any]) -> None:
         self.audit_path.parent.mkdir(parents=True, exist_ok=True)
-        event = {"at": datetime.now(UTC).isoformat(), "actor": actor, "action": "configuration.update", "fields": sorted(changes)}
+        event = {
+            "at": datetime.now(UTC).isoformat(),
+            "actor": actor,
+            "action": "configuration.update",
+            "fields": sorted(changes),
+        }
         with self.audit_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event) + "\n")
 
@@ -68,4 +80,3 @@ class ConfigurationStore:
             return []
         lines = self.audit_path.read_text(encoding="utf-8").splitlines()[-limit:]
         return [json.loads(line) for line in reversed(lines)]
-
