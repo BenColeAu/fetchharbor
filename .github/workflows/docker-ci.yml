@@ -87,6 +87,15 @@ jobs:
           mkdir runtime-rootfs
           docker export "${container_id}" | tar -x -C runtime-rootfs
 
+      - name: Reject stale embedded dependency metadata
+        run: |
+          set -euo pipefail
+          matches="$(grep -RIl -E 'msgpack.{0,80}1\.1\.2|setuptools.{0,80}70\.3\.0' runtime-rootfs 2>/dev/null || true)"
+          if test -n "${matches}"; then
+            printf '%s\n' "${matches}"
+            exit 1
+          fi
+
       - name: Scan final runtime filesystem
         uses: aquasecurity/trivy-action@v0.36.0
         with:
