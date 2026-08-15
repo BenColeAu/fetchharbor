@@ -69,10 +69,13 @@ def build_admin_router(
     async def update_configuration(
         payload: AdminConfiguration, actor: str = Depends(authorize)
     ) -> dict:
-        if payload.payment_mode == "x402":
+        if (
+            payload.payment_mode is not None
+            and payload.payment_mode != settings.payment_mode
+        ):
             raise HTTPException(
                 409,
-                "x402 cannot be enabled until the settlement middleware is installed and verified",
+                "Payment mode is startup-only; change it through deployment configuration and restart",
             )
         return store.update(payload, actor)
 
@@ -87,8 +90,8 @@ def build_admin_router(
             },
             {
                 "name": "Payment enforcement",
-                "status": "blocker",
-                "detail": "The verified x402 settlement middleware has not yet been ported; keep payment mode disabled.",
+                "status": "pass" if settings.payment_mode == "x402" else "warning",
+                "detail": "Official x402 v2 middleware is installed; payment mode is controlled at startup.",
             },
             {
                 "name": "Security headers",
@@ -97,8 +100,8 @@ def build_admin_router(
             },
             {
                 "name": "Outbound request policy",
-                "status": "pass",
-                "detail": "Private, loopback and link-local targets are blocked.",
+                "status": "pass" if settings.outbound_proxy_url else "warning",
+                "detail": "Application URL checks are active; production should also use the restricted egress proxy.",
             },
             {
                 "name": "Committed secrets",

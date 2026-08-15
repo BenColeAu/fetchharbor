@@ -41,7 +41,13 @@ jobs:
           } >> .env
 
       - name: Validate Compose configuration
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          mkdir -p secrets
+          printf '%s' 'ci-only-admin-token-with-at-least-32-characters' > secrets/admin_token.txt
+          FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            docker compose -f compose.yaml -f compose.production.yaml config --quiet
 
       - name: Run tests in the image
         run: |
@@ -80,7 +86,7 @@ jobs:
             -H "X-Admin-Token: ${ADMIN_TOKEN}" \
             http://127.0.0.1:8080/admin/api/security \
             | tee /tmp/security.json
-          grep --fixed-strings '"status":"blocker"' /tmp/security.json
+          grep --fixed-strings '"status":"warning"' /tmp/security.json
 
       - name: Inspect running stack
         run: |

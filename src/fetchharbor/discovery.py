@@ -20,11 +20,16 @@ def x402_manifest(registry: ServiceRegistry, settings: Settings) -> dict[str, An
                         {
                             "scheme": "exact",
                             "network": settings.x402_network,
-                            "amount": str(int(Decimal(price) * 1_000_000)),
+                            "amount": str(
+                                int(Decimal(price) * (10**settings.x402_asset_decimals))
+                            ),
                             "asset": settings.x402_asset,
                             "payTo": settings.x402_pay_to,
-                            "maxTimeoutSeconds": 300,
-                            "extra": {"name": "USD Coin", "version": "2"},
+                            "maxTimeoutSeconds": settings.x402_max_timeout_seconds,
+                            "extra": {
+                                "name": settings.x402_asset_name,
+                                "version": settings.x402_asset_version,
+                            },
                         }
                     ],
                     "extensions": {

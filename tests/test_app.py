@@ -11,10 +11,30 @@ def test_empty_admin_token_file_uses_inline_token() -> None:
     assert configured.resolved_admin_token() == "inline-token"
 
 
+def test_x402_rejects_placeholder_wallet() -> None:
+    try:
+        Settings(payment_mode="x402")
+    except ValueError as exc:
+        assert "receiving wallet" in str(exc)
+    else:
+        raise AssertionError("x402 accepted the placeholder wallet")
+
+
+def test_production_proxy_guard_fails_closed() -> None:
+    try:
+        Settings(env="production", require_outbound_proxy=True, outbound_proxy_url="")
+    except ValueError as exc:
+        assert "proxy" in str(exc)
+    else:
+        raise AssertionError("production accepted a missing required proxy")
+
+
 def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["services"] == 3
+    assert client.get("/health/live").status_code == 200
+    assert client.get("/health/ready").json()["status"] == "ready"
 
 
 def test_html_to_markdown_get_contract() -> None:

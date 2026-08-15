@@ -6,6 +6,7 @@ from .admin.router import build_admin_router
 from .admin.store import ConfigurationStore
 from .config import get_settings
 from .discovery import x402_manifest
+from .payments import install_x402
 from .registry import ServiceRegistry
 from .services import BUILTIN_SERVICES
 
@@ -39,6 +40,7 @@ async def security_headers(request: Request, call_next):
 
 for service in registry.services:
     app.include_router(service.router, tags=[service.name])
+install_x402(app, registry, settings)
 app.include_router(build_admin_router(settings, registry, metrics, configuration_store))
 
 
@@ -49,6 +51,16 @@ async def health() -> dict:
         "services": len(registry.services),
         "payment_mode": settings.payment_mode,
     }
+
+
+@app.get("/health/live", include_in_schema=False)
+async def liveness() -> dict:
+    return {"status": "ok"}
+
+
+@app.get("/health/ready", include_in_schema=False)
+async def readiness() -> dict:
+    return {"status": "ready", "services": len(registry.services)}
 
 
 @app.get("/services")

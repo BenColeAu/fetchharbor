@@ -14,7 +14,7 @@ It is operator-neutral: the repository contains no personal wallet, domain, API 
 - `GET|POST /pdf-parse`
 - `GET /services`
 - `GET /.well-known/x402.json`
-- `GET /health`
+- `GET /health`, `/health/live`, `/health/ready`
 
 ## Start locally
 
@@ -37,9 +37,11 @@ docker compose --profile mcp up -d
 
 Create a module under `src/fetchharbor/services`, expose an `APIRouter` and one `ServiceDefinition`, then add it to `BUILTIN_SERVICES`. The registry adds its router, service catalog entry, x402 requirements and Bazaar discovery metadata.
 
-## Payment migration status
+## Payments
 
-The initial scaffold preserves x402 v2 requirements and Bazaar discovery metadata, but defaults `FETCHHARBOR_PAYMENT_MODE=disabled`. Before production cutover, port the verified FastScrape settlement middleware into a payment adapter and run paid Base-network compatibility tests. Never enable production traffic based only on the discovery manifest.
+FetchHarbor includes the official x402 v2 FastAPI middleware and generates its protected routes from the same service registry used by discovery. Payment remains disabled by default. The example configuration targets Base Sepolia and the signup-free testnet facilitator. Set a real receiving wallet before enabling `FETCHHARBOR_PAYMENT_MODE=x402`.
+
+Mainnet requires a production facilitator and a deliberate network/asset change. A release is not considered mainnet-verified until a real paid request has passed verification and settlement.
 
 Payment and operator settings are customisable without editing source code:
 
@@ -49,6 +51,9 @@ Payment and operator settings are customisable without editing source code:
 | `FETCHHARBOR_X402_NETWORK` | CAIP-2 payment network identifier |
 | `FETCHHARBOR_X402_PAY_TO` | Operator's receiving wallet |
 | `FETCHHARBOR_X402_ASSET` | Accepted payment asset contract |
+| `FETCHHARBOR_X402_ASSET_NAME` | Payment asset display/protocol name |
+| `FETCHHARBOR_X402_ASSET_VERSION` | Payment asset signature-domain version |
+| `FETCHHARBOR_X402_ASSET_DECIMALS` | Conversion between displayed and atomic prices |
 | `FETCHHARBOR_X402_FACILITATOR` | Settlement facilitator |
 | `FETCHHARBOR_PRICE_SCRAPE_USDC` | Scrape price |
 | `FETCHHARBOR_PRICE_HTML_TO_MD_USDC` | HTML conversion price |
@@ -59,6 +64,16 @@ The committed `.env.example` uses only inert placeholders. Operators copy it to 
 ## Operations
 
 The API container runs as an unprivileged user with a read-only filesystem, health check, restart policy, CPU/memory boundaries, and an isolated internal network. Ollama is never published to the host by default.
+
+For a lean production stack, create `secrets/admin_token.txt`, set the two hostnames in `.env`, then run:
+
+```bash
+docker compose -f compose.yaml -f compose.production.yaml up --build -d
+```
+
+This adds only Caddy and a restricted Squid egress proxy. Caddy terminates HTTPS and hides `/admin` on the public hostname; the admin hostname should additionally be restricted by your VPN, tunnel or identity-aware access layer. The API has no direct edge-network attachment in this deployment. Scraping and facilitator traffic leave through the proxy, which rejects private, local, metadata and reserved destinations.
+
+No Prometheus, Grafana, Redis or PostgreSQL services are included. Built-in bounded monitoring and JSON/audit storage remain intentionally single-VM features.
 
 ## Admin control plane
 
