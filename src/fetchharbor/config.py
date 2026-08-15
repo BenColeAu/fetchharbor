@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,9 +13,13 @@ class Settings(BaseSettings):
     env: Literal["development", "test", "production"] = "development"
     public_url: str = "http://localhost:8080"
     payment_mode: Literal["disabled", "x402"] = "disabled"
-    x402_network: str = "eip155:8453"
+    x402_network: str = "eip155:84532"
     x402_pay_to: str = "0x0000000000000000000000000000000000000000"
-    x402_asset: str = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    x402_asset: str = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+    x402_asset_name: str = "USDC"
+    x402_asset_version: str = "2"
+    x402_asset_decimals: int = Field(default=6, ge=0, le=18)
+    x402_max_timeout_seconds: int = Field(default=300, ge=1, le=3600)
     x402_facilitator: str = "https://x402.org/facilitator"
     price_scrape_usdc: str = "0.01"
     price_html_to_md_usdc: str = "0.005"
@@ -29,6 +33,8 @@ class Settings(BaseSettings):
     audit_log_path: Path = Path("data/admin-audit.jsonl")
     security_headers_enabled: bool = True
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
+    outbound_proxy_url: str = ""
+    require_outbound_proxy: bool = False
 
     @field_validator("admin_token_file", mode="before")
     @classmethod
@@ -36,10 +42,23 @@ class Settings(BaseSettings):
         return None if value in (None, "") else value
 
     @model_validator(mode="after")
-    def reject_unimplemented_payment_enforcement(self) -> "Settings":
+    def validate_production_guards(self) -> "Settings":
         if self.payment_mode == "x402":
+            if self.x402_pay_to == "0x0000000000000000000000000000000000000000":
+                raise ValueError("x402 requires a non-placeholder receiving wallet")
+            if not self.x402_network.startswith("eip155:"):
+                raise ValueError("this build currently supports EVM x402 networks only")
+            if not self.x402_pay_to.startswith("0x") or len(self.x402_pay_to) != 42:
+                raise ValueError("x402 receiving wallet must be a 20-byte EVM address")
+            if not self.x402_asset.startswith("0x") or len(self.x402_asset) != 42:
+                raise ValueError("x402 asset must be a 20-byte EVM contract address")
+        if (
+            self.env == "production"
+            and self.require_outbound_proxy
+            and not self.outbound_proxy_url
+        ):
             raise ValueError(
-                "x402 payment enforcement is not implemented; keep payment mode disabled"
+                "production outbound proxy enforcement is enabled but no proxy URL is configured"
             )
         return self
 

@@ -38,7 +38,10 @@ async def fetch_bytes(url: str) -> tuple[httpx.Response, bytes]:
     current_url = url
     try:
         async with httpx.AsyncClient(
-            follow_redirects=False, timeout=settings.request_timeout_seconds
+            follow_redirects=False,
+            timeout=settings.request_timeout_seconds,
+            proxy=settings.outbound_proxy_url or None,
+            trust_env=False,
         ) as client:
             for _ in range(6):
                 _validate_public_url(current_url)

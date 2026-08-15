@@ -1,0 +1,13 @@
+{
+	admin off
+}
+
+{$FETCHHARBOR_PUBLIC_HOST} {
+	@admin path /admin /admin/*
+	respond @admin 404
+	reverse_proxy api:8080
+}
+
+{$FETCHHARBOR_ADMIN_HOST} {
+	reverse_proxy api:8080
+}

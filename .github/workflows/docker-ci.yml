@@ -41,12 +41,72 @@ jobs:
           } >> .env
 
       - name: Validate Compose configuration
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          mkdir -p secrets
+          printf '%s' 'ci-only-admin-token-with-at-least-32-characters' > secrets/admin_token.txt
+          FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            docker compose -f compose.yaml -f compose.production.yaml config --quiet
 
       - name: Run tests in the image
         run: |
+          docker build --target runtime --tag fetchharbor:runtime .
           docker build --target test --tag fetchharbor:test .
           docker run --rm fetchharbor:test
+
+      - name: Audit Python dependencies
+        run: docker run --rm fetchharbor:test pip-audit --local
+
+      - name: Build production egress image
+        run: docker compose -f compose.yaml -f compose.production.yaml build egress-proxy
+        env:
+          FETCHHARBOR_PUBLIC_HOST: fetchharbor.example.com
+          FETCHHARBOR_ADMIN_HOST: admin.fetchharbor.example.com
+
+      - name: Validate Caddy configuration
+        run: |
+          docker run --rm \
+            -e FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+            -e FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            -v "${PWD}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Confirm patched runtime package versions
+        run: |
+          docker run --rm fetchharbor:runtime python -c \
+            "from importlib.metadata import version; from importlib.util import find_spec; assert tuple(map(int, version('msgpack').split('.'))) >= (1, 2, 1); assert find_spec('pip') is None; assert find_spec('setuptools') is None"
+          docker run --rm fetchharbor:runtime sh -c \
+            "test ! -e /usr/local/lib/python3.12/site-packages/msgpack-1.1.2.dist-info && test ! -e /usr/local/lib/python3.12/site-packages/setuptools-70.3.0.dist-info"
+
+      - name: Export final runtime filesystem
+        run: |
+          set -euo pipefail
+          container_id="$(docker create fetchharbor:runtime)"
+          trap 'docker rm -f "${container_id}" >/dev/null 2>&1 || true' EXIT
+          mkdir runtime-rootfs
+          docker export "${container_id}" | tar -x -C runtime-rootfs
+
+      - name: Reject stale embedded dependency metadata
+        run: |
+          set -euo pipefail
+          matches="$(grep -RIl -E 'msgpack.{0,80}1\.1\.2|setuptools.{0,80}70\.3\.0' runtime-rootfs 2>/dev/null || true)"
+          if test -n "${matches}"; then
+            printf '%s\n' "${matches}"
+            exit 1
+          fi
+
+      - name: Scan final runtime filesystem
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: runtime-rootfs
+          version: v0.72.0
+          cache: false
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
 
       - name: Start the Compose API
         run: docker compose up --build --wait --wait-timeout 120 api
@@ -80,7 +140,7 @@ jobs:
             -H "X-Admin-Token: ${ADMIN_TOKEN}" \
             http://127.0.0.1:8080/admin/api/security \
             | tee /tmp/security.json
-          grep --fixed-strings '"status":"blocker"' /tmp/security.json
+          grep --fixed-strings '"status":"warning"' /tmp/security.json
 
       - name: Inspect running stack
         run: |
