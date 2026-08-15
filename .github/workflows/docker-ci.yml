@@ -51,8 +51,35 @@ jobs:
 
       - name: Run tests in the image
         run: |
+          docker build --target runtime --tag fetchharbor:runtime .
           docker build --target test --tag fetchharbor:test .
           docker run --rm fetchharbor:test
+
+      - name: Audit Python dependencies
+        run: docker run --rm fetchharbor:test pip-audit --local
+
+      - name: Build production egress image
+        run: docker compose -f compose.yaml -f compose.production.yaml build egress-proxy
+        env:
+          FETCHHARBOR_PUBLIC_HOST: fetchharbor.example.com
+          FETCHHARBOR_ADMIN_HOST: admin.fetchharbor.example.com
+
+      - name: Validate Caddy configuration
+        run: |
+          docker run --rm \
+            -e FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+            -e FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            -v "${PWD}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: fetchharbor:runtime
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
 
       - name: Start the Compose API
         run: docker compose up --build --wait --wait-timeout 120 api
