@@ -147,6 +147,7 @@ jobs:
         run: |
           docker compose ps
           test "$(docker inspect --format '{{.State.Health.Status}}' fetchharbor-api-1)" = 'healthy'
+          docker exec fetchharbor-api-1 test -w /app/data
 
       - name: Show logs after failure
         if: failure()
