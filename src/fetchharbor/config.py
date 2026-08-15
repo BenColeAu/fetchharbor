@@ -13,11 +13,17 @@ class Settings(BaseSettings):
     x402_pay_to: str = "0x0000000000000000000000000000000000000000"
     x402_asset: str = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
     x402_facilitator: str = "https://x402.org/facilitator"
+    price_scrape_usdc: str = "0.01"
+    price_html_to_md_usdc: str = "0.005"
+    price_pdf_parse_usdc: str = "0.01"
     max_download_bytes: int = 20 * 1024 * 1024
     request_timeout_seconds: float = 30
+
+    def service_price(self, service_name: str, default: str) -> str:
+        key = service_name.replace("-", "_")
+        return str(getattr(self, f"price_{key}_usdc", default))
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

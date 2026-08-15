@@ -23,3 +23,8 @@ def test_discovery_contains_six_route_entries() -> None:
     assert response.json()["x402Version"] == 2
     assert len(response.json()["resources"]) == 6
 
+
+def test_repository_defaults_do_not_contain_original_operator_wallet() -> None:
+    response = client.get("/.well-known/x402.json")
+    payees = {item["accepts"][0]["payTo"] for item in response.json()["resources"]}
+    assert payees == {"0x0000000000000000000000000000000000000000"}

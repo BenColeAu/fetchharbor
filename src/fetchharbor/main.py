@@ -22,10 +22,12 @@ async def health() -> dict:
 
 @app.get("/services")
 async def services() -> list[dict]:
-    return registry.catalog()
+    catalog = registry.catalog()
+    for item in catalog:
+        item["price_usdc"] = settings.service_price(item["name"], item["price_usdc"])
+    return catalog
 
 
 @app.get("/.well-known/x402.json")
 async def discovery() -> dict:
     return x402_manifest(registry, settings)
-
