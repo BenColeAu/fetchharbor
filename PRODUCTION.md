@@ -24,16 +24,23 @@ and start production with the `ollama` profile. The Ollama API remains private t
 the internal Compose network and is not published on the host.
 
 ```bash
-docker compose -f compose.yaml -f compose.production.yaml --profile ollama up --build -d
-docker compose -f compose.yaml -f compose.production.yaml exec ollama ollama pull llama3.2:3b
-docker compose -f compose.yaml -f compose.production.yaml restart api
+docker compose -f compose.yaml -f compose.production.yaml \
+  -f compose.ollama-download.yaml --profile ollama up -d ollama
+docker compose -f compose.yaml -f compose.production.yaml \
+  -f compose.ollama-download.yaml exec ollama ollama pull llama3.2:3b
+docker compose -f compose.yaml -f compose.production.yaml \
+  --profile ollama up -d --force-recreate ollama
+docker compose -f compose.yaml -f compose.production.yaml \
+  --profile ollama up --build -d
 ```
 
 Confirm `chat` appears in `/services` and `POST /chat` succeeds while payment is
 disabled. When x402 is enabled, confirm the same request returns `402` before a
 payment is supplied. Pulling the model is an explicit deployment step; a healthy
-empty Ollama container does not mean the selected model is installed. Size CPU,
-RAM, disk and any accelerator for the selected model and expected concurrency.
+empty Ollama container does not mean the selected model is installed. The
+download overlay publishes no port and must be removed by the subsequent forced
+recreation; verify Ollama then has only the `internal` network. Size CPU, RAM,
+disk and any accelerator for the selected model and expected concurrency.
 
 Resource metrics describe the container-visible process and host values. Container quota interpretation varies by runtime, so production alerts should use the Docker/VM monitoring system as the authoritative source.
 

@@ -59,6 +59,10 @@ jobs:
           FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml \
               -f compose.cloudflare-tunnel.yaml config --quiet
+          FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            docker compose -f compose.yaml -f compose.production.yaml \
+              -f compose.ollama-download.yaml --profile ollama config --quiet
 
       - name: Run tests in the image
         run: |

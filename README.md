@@ -30,10 +30,16 @@ Every push and pull request is also tested entirely on a free GitHub-hosted Linu
 Optional profiles remain internal to the Compose network:
 
 ```bash
+docker compose -f compose.yaml -f compose.ollama-download.yaml --profile ollama up -d ollama
+docker compose -f compose.yaml -f compose.ollama-download.yaml exec ollama ollama pull llama3.2:3b
+docker compose --profile ollama up -d --force-recreate ollama
 docker compose --profile ollama up --build -d
-docker compose exec ollama ollama pull llama3.2:3b
 docker compose --profile mcp up -d
 ```
+
+The download overlay grants Ollama temporary outbound access but publishes no
+port. Recreating Ollama without the overlay returns it to the internal-only
+network; the downloaded model remains in `ollama-data`.
 
 Enable the built-in chat service with `FETCHHARBOR_OLLAMA_ENABLED=true`. It is
 registered only when enabled, so disabled deployments do not advertise an
