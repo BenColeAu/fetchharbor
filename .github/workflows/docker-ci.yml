@@ -36,9 +36,8 @@ jobs:
           {
             echo 'FETCHHARBOR_ENV=test'
             echo 'FETCHHARBOR_ADMIN_ENABLED=true'
-            echo 'FETCHHARBOR_ADMIN_HOST='
             echo 'FETCHHARBOR_ADMIN_TOKEN=ci-only-admin-token-with-at-least-32-characters'
-            echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1'
+            echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1,admin.fetchharbor.example.com'
           } >> .env
 
       - name: Validate Compose configuration
@@ -170,18 +169,21 @@ jobs:
           grep --fixed-strings '"markdown":"# Hello"' /tmp/markdown.json
 
           curl --fail --silent --show-error \
+            -H 'Host: admin.fetchharbor.example.com' \
             -H "X-Admin-Token: ${ADMIN_TOKEN}" \
             http://127.0.0.1:8080/admin/api/overview \
             | tee /tmp/admin.json
           grep --fixed-strings '"service_count":3' /tmp/admin.json
 
           status="$(curl --silent --output /tmp/x402-enable.json --write-out '%{http_code}' \
+            -H 'Host: admin.fetchharbor.example.com' \
             -X PUT -H "X-Admin-Token: ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
             --data '{"payment_mode":"x402"}' \
             http://127.0.0.1:8080/admin/api/configuration)"
           test "${status}" = '409'
 
           curl --fail --silent --show-error \
+            -H 'Host: admin.fetchharbor.example.com' \
             -H "X-Admin-Token: ${ADMIN_TOKEN}" \
             http://127.0.0.1:8080/admin/api/security \
             | tee /tmp/security.json

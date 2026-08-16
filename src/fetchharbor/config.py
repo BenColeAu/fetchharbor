@@ -71,15 +71,21 @@ class Settings(BaseSettings):
                     == "https://api.cdp.coinbase.com/platform/v2/x402"
                     and self.x402_facilitator_auth != "cdp"
                 ):
-                    raise ValueError("Base mainnet CDP facilitator requires CDP authentication")
+                    raise ValueError(
+                        "Base mainnet CDP facilitator requires CDP authentication"
+                    )
             if self.x402_facilitator_auth == "cdp":
                 try:
                     key_id = self.resolved_cdp_api_key_id()
                     key_secret = self.resolved_cdp_api_key_secret()
                 except OSError as exc:
-                    raise ValueError("CDP facilitator credential could not be read") from exc
+                    raise ValueError(
+                        "CDP facilitator credential could not be read"
+                    ) from exc
                 if not key_id or not key_secret:
-                    raise ValueError("CDP facilitator authentication requires both credentials")
+                    raise ValueError(
+                        "CDP facilitator authentication requires both credentials"
+                    )
         if (
             self.env == "production"
             and self.require_outbound_proxy

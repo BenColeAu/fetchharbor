@@ -49,7 +49,9 @@ def test_base_mainnet_cdp_facilitator_requires_authentication() -> None:
     except ValueError as exc:
         assert "authentication" in str(exc)
     else:
-        raise AssertionError("Base mainnet CDP facilitator accepted missing authentication")
+        raise AssertionError(
+            "Base mainnet CDP facilitator accepted missing authentication"
+        )
 
 
 def test_production_proxy_guard_fails_closed() -> None:
@@ -168,7 +170,10 @@ def test_admin_host_is_enforced_by_the_application() -> None:
     settings.admin_enabled, settings.admin_host = True, "testserver"
     try:
         assert client.get("/admin", headers={"Host": "localhost"}).status_code == 404
-        assert client.get("/admin", headers={"Host": settings.admin_host}).status_code == 200
+        assert (
+            client.get("/admin", headers={"Host": settings.admin_host}).status_code
+            == 200
+        )
     finally:
         settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
 

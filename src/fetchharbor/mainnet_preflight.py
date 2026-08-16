@@ -29,7 +29,9 @@ def main() -> None:
         kind.get("scheme") == "exact" and kind.get("network") == settings.x402_network
         for kind in kinds
     ):
-        raise RuntimeError("facilitator does not advertise exact payments on Base mainnet")
+        raise RuntimeError(
+            "facilitator does not advertise exact payments on Base mainnet"
+        )
     print(
         "Mainnet preflight passed without settlement:",
         {
