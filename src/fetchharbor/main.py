@@ -66,6 +66,14 @@ async def security_headers(request: Request, call_next):
                 "default-src 'self'; style-src 'self' 'unsafe-inline'; "
                 "script-src 'self' 'unsafe-inline'; connect-src 'self'"
             )
+    if request.url.path.startswith("/admin"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    if settings.env == "production":
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
     return response
 
 

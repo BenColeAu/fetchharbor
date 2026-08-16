@@ -83,12 +83,30 @@ The automated gates do not replace host-specific release work. Before accepting 
 
 ## Administrator release runbook
 
-The admin control plane can save the EVM receiving wallet under **Payment
-Settlement**. The value is validated, persisted and audited, but deliberately
-does not change the running payment middleware. Confirm the complete address,
-network and asset independently, then restart FetchHarbor and verify that the
-panel reports the wallet as active before accepting paid traffic. Changing the
-receiving wallet does not configure facilitator credentials or enable x402.
+The admin control plane can stage the payment mode, EVM receiving wallet,
+network, asset contract, facilitator URL, authentication mode and service prices
+under **Payment & Facilitator**. The complete prospective configuration is
+validated, persisted and audited, but deliberately does not change the running
+payment middleware. Restart FetchHarbor, then verify the panel reports the new
+values as active before accepting paid traffic.
+
+For CDP, an operator can save the API key ID and private key in the separate
+credential form. The API never returns either value after saving and the audit
+log records only that credentials changed. Admin-managed credentials live in
+the persistent FetchHarbor data volume with restricted file permissions; they
+are not encrypted by the application. Use disk encryption and strict host
+access, or retain `compose.mainnet.yaml` and an external secret manager for a
+higher-assurance deployment. A mounted external credential takes precedence and
+the panel intentionally makes it read-only. FetchHarbor never requests or stores
+the payout wallet's private key.
+
+Submit admin-managed credentials only through the protected HTTPS admin
+hostname. Admin pages and API responses are marked `no-store`; credential
+validation errors never reflect submitted values; request bodies are size
+limited; and the browser clears password fields after submission. FetchHarbor
+does not log request bodies. Treat browser extensions, endpoint malware, host
+administrators, Docker-volume access and backups as part of the trusted boundary:
+application controls cannot protect a secret from a compromised browser or host.
 
 ### 1. Domain and TLS
 
@@ -172,7 +190,12 @@ FetchHarbor's FastScrape-compatible mainnet example uses Base mainnet USDC:
 - facilitator: `https://api.cdp.coinbase.com/platform/v2/x402`
 - facilitator authentication: short-lived CDP JWTs generated independently for `/supported`, `/verify` and `/settle`
 
-Copy the values from `.env.mainnet.example` into `.env`, replace `FETCHHARBOR_X402_PAY_TO` with the operator's receiving address, and set operator-approved prices. The receiving wallet is public configuration; FetchHarbor does not need its private key. Create a least-privilege CDP API key, store its ID and secret as `secrets/cdp_api_key_id.txt` and `secrets/cdp_api_key_secret.txt`, and do not put either in `.env`.
+Either use the protected admin panel and restart the API, or copy the values
+from `.env.mainnet.example` into `.env`. The receiving wallet is public
+configuration; FetchHarbor does not need its private key. For externally managed
+credentials, create a least-privilege CDP API key, store its ID and private key
+as `secrets/cdp_api_key_id.txt` and `secrets/cdp_api_key_secret.txt`, and do not
+put either in `.env`.
 
 Start with both production and mainnet overlays:
 

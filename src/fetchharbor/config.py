@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     x402_cdp_api_key_id_file: Path | None = None
     x402_cdp_api_key_secret: str = ""
     x402_cdp_api_key_secret_file: Path | None = None
+    admin_managed_secret_dir: Path = Path("data/secrets")
     price_scrape_usdc: str = "0.01"
     price_html_to_md_usdc: str = "0.005"
     price_pdf_parse_usdc: str = "0.01"
@@ -135,11 +136,17 @@ class Settings(BaseSettings):
     def resolved_cdp_api_key_id(self) -> str:
         if self.x402_cdp_api_key_id_file:
             return self.x402_cdp_api_key_id_file.read_text(encoding="utf-8").strip()
+        managed = self.admin_managed_secret_dir / "cdp_api_key_id.txt"
+        if managed.exists():
+            return managed.read_text(encoding="utf-8").strip()
         return self.x402_cdp_api_key_id.strip()
 
     def resolved_cdp_api_key_secret(self) -> str:
         if self.x402_cdp_api_key_secret_file:
             return self.x402_cdp_api_key_secret_file.read_text(encoding="utf-8").strip()
+        managed = self.admin_managed_secret_dir / "cdp_api_key_secret.txt"
+        if managed.exists():
+            return managed.read_text(encoding="utf-8").strip()
         return self.x402_cdp_api_key_secret.strip()
 
     def trusted_hosts(self) -> list[str]:

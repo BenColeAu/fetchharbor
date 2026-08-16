@@ -188,7 +188,7 @@ jobs:
             -X PUT -H "X-Admin-Token: ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
             --data '{"payment_mode":"x402"}' \
             http://127.0.0.1:8080/admin/api/configuration)"
-          test "${status}" = '409'
+          test "${status}" = '422'
 
           curl --fail --silent --show-error \
             -H 'Host: admin.fetchharbor.example.com' \
