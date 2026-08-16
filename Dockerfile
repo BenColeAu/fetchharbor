@@ -20,6 +20,9 @@ CMD ["uvicorn", "fetchharbor.main:app", "--host", "0.0.0.0", "--port", "8080", "
 FROM runtime AS test
 USER root
 COPY tests ./tests
+COPY compose.production.yaml ./compose.production.yaml
+COPY deploy/egress-proxy/squid.conf ./deploy/egress-proxy/squid.conf
+RUN find src tests -type f -exec chmod a-x {} +
 RUN python -m ensurepip --upgrade \
     && python -m pip install --no-cache-dir --upgrade 'pip>=26.1.2,<27' 'setuptools>=78.1.1' \
     && pip install --no-cache-dir '.[test]'

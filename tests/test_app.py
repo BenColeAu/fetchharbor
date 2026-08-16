@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
@@ -9,6 +10,14 @@ from fetchharbor.main import app, settings
 from fetchharbor.services.scrape import _validate_public_url
 
 client = TestClient(app)
+
+
+def test_egress_proxy_health_check_requires_a_real_manager_response() -> None:
+    configuration = Path("deploy/egress-proxy/squid.conf").read_text(encoding="utf-8")
+    compose = Path("compose.production.yaml").read_text(encoding="utf-8")
+    assert "http_access allow localhost manager" in configuration
+    assert "http_access deny manager" in configuration
+    assert "grep -q '^Squid Object Cache:'" in compose
 
 
 def test_empty_admin_token_file_uses_inline_token() -> None:
@@ -204,7 +213,7 @@ def test_admin_requires_token_when_enabled() -> None:
             headers={"X-Admin-Token": settings.admin_token},
             json={"payment_mode": "x402"},
         )
-        assert response.status_code == 409
+        assert response.status_code == 422
     finally:
         settings.admin_enabled, settings.admin_token, settings.admin_host = (
             previous_enabled,
@@ -309,6 +318,79 @@ def test_payout_address_rejects_zero_and_malformed_addresses() -> None:
             raise AssertionError(f"accepted invalid payout address: {address}")
 
 
+def test_admin_managed_facilitator_credentials_are_not_disclosed(tmp_path) -> None:
+    configured = Settings(
+        admin_config_path=tmp_path / "admin-config.json",
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+        admin_managed_secret_dir=tmp_path / "secrets",
+    )
+    store = ConfigurationStore(configured)
+    status = store.update_facilitator_credentials(
+        "organizations/test/apiKeys/key-id", "private-secret-value", "test"
+    )
+
+    assert status["configured"] is True
+    assert status["source"] == "admin"
+    assert status["key_id_fingerprint"]
+    assert "private-secret-value" not in str(status)
+    assert "private-secret-value" not in str(store.audit_events())
+    assert configured.resolved_cdp_api_key_secret() == "private-secret-value"
+
+
+def test_external_facilitator_credentials_cannot_be_replaced(tmp_path) -> None:
+    key_id = tmp_path / "external-id"
+    key_secret = tmp_path / "external-secret"
+    key_id.write_text("external-id", encoding="utf-8")
+    key_secret.write_text("external-secret", encoding="utf-8")
+    configured = Settings(
+        x402_cdp_api_key_id_file=key_id,
+        x402_cdp_api_key_secret_file=key_secret,
+        admin_config_path=tmp_path / "admin-config.json",
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+    )
+    store = ConfigurationStore(configured)
+    assert store.facilitator_credentials_status()["source"] == "external"
+    try:
+        store.update_facilitator_credentials("replacement", "replacement", "test")
+    except ValueError as exc:
+        assert "externally managed" in str(exc)
+    else:
+        raise AssertionError("externally managed credentials were replaced")
+
+
+def test_complete_payment_configuration_is_validated_and_restart_gated(
+    tmp_path,
+) -> None:
+    configured = Settings(
+        admin_config_path=tmp_path / "admin-config.json",
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+        admin_managed_secret_dir=tmp_path / "secrets",
+    )
+    store = ConfigurationStore(configured)
+    store.update_facilitator_credentials("key-id", "private-key", "test")
+    result = store.update(
+        AdminConfiguration(
+            payment_mode="x402",
+            x402_network="eip155:8453",
+            x402_asset="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            x402_pay_to="0x1111111111111111111111111111111111111111",
+            x402_facilitator="https://api.cdp.coinbase.com/platform/v2/x402",
+            x402_facilitator_auth="cdp",
+        ),
+        "test",
+    )
+    assert configured.payment_mode == "disabled"
+    assert "payment_mode" in result["restart_required"]
+
+    restarted = Settings(
+        admin_config_path=tmp_path / "admin-config.json",
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+        admin_managed_secret_dir=tmp_path / "secrets",
+    )
+    ConfigurationStore(restarted)
+    assert restarted.payment_mode == "x402"
+
+
 def test_invalid_persisted_payout_address_blocks_startup(tmp_path) -> None:
     config_path = tmp_path / "admin-config.json"
     config_path.write_text('{"x402_pay_to":"not-a-wallet"}', encoding="utf-8")
@@ -332,8 +414,38 @@ def test_admin_dashboard_escapes_dynamic_values() -> None:
         assert "const esc=" in response.text
         assert "${esc(c.public_url)}" in response.text
         assert 'href="https://github.com/BenColeAu/fetchharbor"' in response.text
+        assert response.headers["cache-control"].startswith("no-store")
+        assert 'id="token" type="password"' in response.text
+        assert 'autocomplete="off"' in response.text
     finally:
         settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
+
+
+def test_invalid_facilitator_secret_is_not_reflected(tmp_path) -> None:
+    previous_enabled, previous_token, previous_host = (
+        settings.admin_enabled,
+        settings.admin_token,
+        settings.admin_host,
+    )
+    settings.admin_enabled = True
+    settings.admin_token = "a-secure-test-token-that-is-long-enough"
+    settings.admin_host = "testserver"
+    marker = "DO-NOT-REFLECT-THIS-SECRET"
+    try:
+        response = client.put(
+            "/admin/api/facilitator-credentials",
+            headers={"X-Admin-Token": settings.admin_token},
+            json={"api_key_id": "key-id", "api_key_secret": marker * 1000},
+        )
+        assert response.status_code in {413, 422}
+        assert marker not in response.text
+        assert response.headers["cache-control"].startswith("no-store")
+    finally:
+        settings.admin_enabled, settings.admin_token, settings.admin_host = (
+            previous_enabled,
+            previous_token,
+            previous_host,
+        )
 
 
 def test_admin_host_is_enforced_by_the_application() -> None:

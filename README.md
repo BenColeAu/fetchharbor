@@ -120,3 +120,9 @@ Set `FETCHHARBOR_ADMIN_ENABLED=true`, supply a strong token (preferably with `FE
 Admin is disabled by default. Do not publish it directly to the internet; place it behind a VPN, private ingress, or an additional identity-aware proxy. See [PRODUCTION.md](PRODUCTION.md) for release blockers and deployment requirements.
 
 The optional `compose.cloudflare-tunnel.yaml` overlay replaces direct Caddy ingress with a pinned, outbound-only Cloudflare Tunnel connector. The optional `compose.mainnet.yaml` overlay mounts CDP facilitator credentials without placing them in `.env`. See [PRODUCTION.md](PRODUCTION.md) for the exact release sequence.
+
+Operators can also stage the complete x402 network, asset, payout, facilitator,
+authentication and pricing configuration from the protected admin panel. CDP
+credentials may be stored in the persistent data volume without ever being
+returned by the API; externally mounted secrets remain supported and take
+precedence. All payment changes require a deliberate application restart.

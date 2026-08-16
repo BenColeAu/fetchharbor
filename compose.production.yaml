@@ -41,7 +41,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     healthcheck:
-      test: ["CMD-SHELL", "squidclient -h 127.0.0.1 -p 3128 mgr:info >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "squidclient -h 127.0.0.1 -p 3128 mgr:info 2>/dev/null | grep -q '^Squid Object Cache:'"]
       interval: 15s
       timeout: 5s
       retries: 5
