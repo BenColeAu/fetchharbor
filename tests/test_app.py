@@ -295,10 +295,16 @@ def test_admin_host_is_enforced_by_the_application() -> None:
     settings.admin_enabled, settings.admin_host = True, "testserver"
     try:
         assert client.get("/admin", headers={"Host": "localhost"}).status_code == 404
+        assert client.get("/admin/", headers={"Host": "localhost"}).status_code == 404
         assert (
             client.get("/admin", headers={"Host": settings.admin_host}).status_code
             == 200
         )
+        trailing_slash = client.get(
+            "/admin/", headers={"Host": settings.admin_host}, follow_redirects=False
+        )
+        assert trailing_slash.status_code == 307
+        assert trailing_slash.headers["location"] == "/admin"
     finally:
         settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
 

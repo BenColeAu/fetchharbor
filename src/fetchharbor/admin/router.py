@@ -3,7 +3,7 @@ from collections import defaultdict, deque
 from time import monotonic
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..config import Settings
 from ..registry import ServiceRegistry
@@ -54,6 +54,13 @@ def build_admin_router(
         if not settings.admin_enabled:
             raise HTTPException(404, "Admin is disabled")
         return DASHBOARD_HTML
+
+    @router.get("/", include_in_schema=False)
+    async def dashboard_with_trailing_slash(request: Request) -> RedirectResponse:
+        require_admin_host(request)
+        if not settings.admin_enabled:
+            raise HTTPException(404, "Admin is disabled")
+        return RedirectResponse(url="/admin", status_code=307)
 
     @router.get("/api/overview", include_in_schema=False)
     async def overview(_: str = Depends(authorize)) -> dict:
