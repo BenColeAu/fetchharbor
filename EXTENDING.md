@@ -104,6 +104,11 @@ during deployment. Do not expose Ollama's port publicly; its local API does not
 require authentication. In production Compose, keep both `api` and `ollama` on
 the `internal` network.
 
+On a compatible NVIDIA host, include `compose.gpu.yaml` in the steady-state
+Compose command. This reserves one GPU for Ollama only; omitting the overlay is
+the CPU fallback. Verify the selected model fits in VRAM at the configured context
+and concurrency rather than assuming that container GPU detection is sufficient.
+
 ## Adapting the pattern to any provider
 
 Keep the public `ChatRequest`, `ChatResponse`, route, and `ServiceDefinition`

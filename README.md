@@ -41,6 +41,15 @@ The download overlay grants Ollama temporary outbound access but publishes no
 port. Recreating Ollama without the overlay returns it to the internal-only
 network; the downloaded model remains in `ollama-data`.
 
+NVIDIA hosts with the container runtime installed can add GPU acceleration without
+changing the portable default stack:
+
+```bash
+docker compose -f compose.yaml -f compose.gpu.yaml --profile ollama up -d
+```
+
+The overlay reserves one NVIDIA GPU for Ollama only. Omit it for CPU fallback.
+
 Enable the built-in chat service with `FETCHHARBOR_OLLAMA_ENABLED=true`. It is
 registered only when enabled, so disabled deployments do not advertise an
 unavailable route. See [EXTENDING.md](EXTENDING.md) for configuration and testing.

@@ -1,0 +1,14 @@
+# Optional NVIDIA GPU acceleration for Ollama. CPU-only deployments omit this file.
+services:
+  ollama:
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8g
+        reservations:
+          memory: 2g
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
