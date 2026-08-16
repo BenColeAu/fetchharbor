@@ -11,11 +11,11 @@ from .config import get_settings
 from .discovery import x402_manifest
 from .payments import install_x402
 from .registry import ServiceRegistry
-from .services import BUILTIN_SERVICES
+from .services import configured_services
 
 settings = get_settings()
 registry = ServiceRegistry()
-for service in BUILTIN_SERVICES:
+for service in configured_services(settings):
     registry.register(service)
 
 app = FastAPI(

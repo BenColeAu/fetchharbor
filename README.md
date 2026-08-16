@@ -12,6 +12,7 @@ It is operator-neutral: the repository contains no personal wallet, domain, API 
 - `GET|POST /scrape`
 - `GET|POST /html-to-md`
 - `GET|POST /pdf-parse`
+- `POST /chat` when `FETCHHARBOR_OLLAMA_ENABLED=true`
 - `GET /services`
 - `GET /.well-known/x402.json`
 - `GET /health`, `/health/live`, `/health/ready`
@@ -29,13 +30,23 @@ Every push and pull request is also tested entirely on a free GitHub-hosted Linu
 Optional profiles remain internal to the Compose network:
 
 ```bash
-docker compose --profile ollama up -d
+docker compose --profile ollama up --build -d
+docker compose exec ollama ollama pull llama3.2:3b
 docker compose --profile mcp up -d
 ```
+
+Enable the built-in chat service with `FETCHHARBOR_OLLAMA_ENABLED=true`. It is
+registered only when enabled, so disabled deployments do not advertise an
+unavailable route. See [EXTENDING.md](EXTENDING.md) for configuration and testing.
 
 ## Add a service
 
 Create a module under `src/fetchharbor/services`, expose an `APIRouter` and one `ServiceDefinition`, then add it to `BUILTIN_SERVICES`. The registry adds its router, service catalog entry, x402 requirements and Bazaar discovery metadata.
+
+See [EXTENDING.md](EXTENDING.md) for the universal plug-and-play service contract,
+configuration and security checklist, testing requirements, and a complete Ollama
+chat adapter example. The same pattern supports local functions, internal
+containers, hosted APIs, databases, queues, and other providers.
 
 ## Payments
 
@@ -61,6 +72,13 @@ Payment and operator settings are customisable without editing source code:
 | `FETCHHARBOR_PRICE_SCRAPE_USDC` | Scrape price |
 | `FETCHHARBOR_PRICE_HTML_TO_MD_USDC` | HTML conversion price |
 | `FETCHHARBOR_PRICE_PDF_PARSE_USDC` | PDF parsing price |
+| `FETCHHARBOR_PRICE_CHAT_USDC` | Ollama chat price |
+| `FETCHHARBOR_OLLAMA_ENABLED` | Register the optional `/chat` capability |
+| `FETCHHARBOR_OLLAMA_BASE_URL` | Private or operator-approved Ollama API URL |
+| `FETCHHARBOR_OLLAMA_MODEL` | Installed model used by `/chat` |
+| `FETCHHARBOR_OLLAMA_MAX_PROMPT_CHARACTERS` | Per-request prompt bound |
+| `FETCHHARBOR_OLLAMA_MAX_OUTPUT_TOKENS` | Per-request generation bound |
+| `FETCHHARBOR_OLLAMA_MAX_CONCURRENCY` | Maximum simultaneous generations |
 
 The committed `.env.example` uses only inert placeholders. Operators copy it to `.env`; `.env` is ignored by Git. New service modules can add their own configuration through the same settings model.
 

@@ -16,6 +16,25 @@ FetchHarbor has a lean hardened deployment path, but mainnet payment readiness s
 
 Monitoring counters and authentication throttles are in process memory. Runtime configuration is persisted to one JSON file. These mechanisms are deliberately scoped to one API container. Before horizontal scaling, move throttling to a shared service or edge proxy and configuration/audit data to a transactional shared database. External metrics systems are optional and are not part of the clean default stack.
 
+## Optional Ollama chat service
+
+`POST /chat` is built in but disabled by default. To enable it, set
+`FETCHHARBOR_OLLAMA_ENABLED=true`, select the model and resource limits in `.env`,
+and start production with the `ollama` profile. The Ollama API remains private to
+the internal Compose network and is not published on the host.
+
+```bash
+docker compose -f compose.yaml -f compose.production.yaml --profile ollama up --build -d
+docker compose -f compose.yaml -f compose.production.yaml exec ollama ollama pull llama3.2:3b
+docker compose -f compose.yaml -f compose.production.yaml restart api
+```
+
+Confirm `chat` appears in `/services` and `POST /chat` succeeds while payment is
+disabled. When x402 is enabled, confirm the same request returns `402` before a
+payment is supplied. Pulling the model is an explicit deployment step; a healthy
+empty Ollama container does not mean the selected model is installed. Size CPU,
+RAM, disk and any accelerator for the selected model and expected concurrency.
+
 Resource metrics describe the container-visible process and host values. Container quota interpretation varies by runtime, so production alerts should use the Docker/VM monitoring system as the authoritative source.
 
 FetchHarbor blocks private, loopback and link-local destinations and revalidates every redirect. The production Compose overlay also removes the API's direct edge attachment and sends outbound traffic through Squid, which independently blocks private, local, metadata and reserved ranges. Operators should additionally enforce VM firewall rules so Docker configuration changes cannot bypass this boundary.
