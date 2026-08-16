@@ -110,6 +110,22 @@ async def test_ollama_chat_fails_closed_on_provider_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ollama_chat_fails_closed_on_provider_timeout() -> None:
+    configured = Settings(ollama_enabled=True)
+    _limiters.clear()
+    with (
+        patch("fetchharbor.services.chat.get_settings", return_value=configured),
+        patch(
+            "fetchharbor.services.chat.httpx.AsyncClient",
+            side_effect=httpx.TimeoutException("controlled timeout"),
+        ),
+        pytest.raises(HTTPException) as error,
+    ):
+        await ollama_chat("Hello")
+    assert error.value.status_code == 504
+
+
+@pytest.mark.asyncio
 async def test_ollama_chat_rejects_operator_prompt_limit() -> None:
     configured = Settings(ollama_enabled=True, ollama_max_prompt_characters=5)
     with (
