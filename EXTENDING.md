@@ -87,19 +87,22 @@ payment middleware is built at startup.
 The existing `ollama` profile keeps port `11434` private to the Compose network:
 
 ```bash
+docker compose -f compose.yaml -f compose.ollama-download.yaml --profile ollama up -d ollama
+docker compose -f compose.yaml -f compose.ollama-download.yaml exec ollama ollama pull llama3.2:3b
+docker compose --profile ollama up -d --force-recreate ollama
 docker compose --profile ollama up --build -d
-docker compose exec ollama ollama pull llama3.2:3b
-docker compose restart api
 curl -X POST http://localhost:8080/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"Reply with one short greeting."}'
 ```
 
 The image and model are separate artifacts: starting the container does not prove
-the configured model is present. Pull and smoke-test every pinned model during
-deployment. Do not expose Ollama's port publicly; its local API does not require
-authentication. In production Compose, keep both `api` and `ollama` on the
-`internal` network.
+the configured model is present. The download overlay temporarily gives Ollama
+outbound access without publishing its port. The forced recreation removes that
+access while retaining the model volume. Pull and smoke-test every pinned model
+during deployment. Do not expose Ollama's port publicly; its local API does not
+require authentication. In production Compose, keep both `api` and `ollama` on
+the `internal` network.
 
 ## Adapting the pattern to any provider
 

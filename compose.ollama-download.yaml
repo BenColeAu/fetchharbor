@@ -1,0 +1,5 @@
+# Temporary deployment overlay for downloading operator-selected models.
+# Recreate Ollama without this overlay immediately after the pull completes.
+services:
+  ollama:
+    networks: !override [edge, internal]
