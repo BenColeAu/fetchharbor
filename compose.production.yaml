@@ -8,7 +8,7 @@ services:
       FETCHHARBOR_REQUIRE_OUTBOUND_PROXY: "true"
       HTTP_PROXY: http://egress-proxy:3128
       HTTPS_PROXY: http://egress-proxy:3128
-      NO_PROXY: localhost,127.0.0.1,api,egress-proxy
+      NO_PROXY: localhost,127.0.0.1,api,egress-proxy,ollama
     secrets: [admin_token]
     depends_on:
       egress-proxy:

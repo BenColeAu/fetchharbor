@@ -17,6 +17,7 @@ class AdminConfiguration(BaseModel):
         default=None, pattern=r"^\d+(\.\d{1,6})?$"
     )
     price_pdf_parse_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
+    price_chat_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
     max_download_bytes: int | None = Field(default=None, ge=1024, le=100 * 1024 * 1024)
     request_timeout_seconds: float | None = Field(default=None, ge=1, le=300)
     security_headers_enabled: bool | None = None
@@ -27,6 +28,7 @@ RESTART_REQUIRED_FIELDS = {
     "price_scrape_usdc",
     "price_html_to_md_usdc",
     "price_pdf_parse_usdc",
+    "price_chat_usdc",
 }
 
 

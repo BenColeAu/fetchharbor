@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,8 +30,18 @@ class Settings(BaseSettings):
     price_scrape_usdc: str = "0.01"
     price_html_to_md_usdc: str = "0.005"
     price_pdf_parse_usdc: str = "0.01"
+    price_chat_usdc: str = "0.01"
     max_download_bytes: int = 20 * 1024 * 1024
     request_timeout_seconds: float = 30
+    ollama_enabled: bool = False
+    ollama_base_url: str = "http://ollama:11434"
+    ollama_model: str = "llama3.2:3b"
+    ollama_max_prompt_characters: int = Field(default=8_000, ge=1, le=8_000)
+    ollama_max_output_tokens: int = Field(default=512, ge=1, le=32_768)
+    ollama_max_concurrency: int = Field(default=2, ge=1, le=128)
+    ollama_queue_timeout_seconds: float = Field(default=1, gt=0, le=60)
+    ollama_timeout_seconds: float = Field(default=120, gt=0, le=3600)
+    ollama_keep_alive: str = "5m"
     admin_enabled: bool = False
     admin_host: str = ""
     admin_token: str = ""
@@ -54,6 +65,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_guards(self) -> "Settings":
+        if self.ollama_enabled:
+            parsed_ollama_url = urlparse(self.ollama_base_url)
+            if (
+                parsed_ollama_url.scheme not in {"http", "https"}
+                or not parsed_ollama_url.hostname
+            ):
+                raise ValueError("Ollama base URL must be an absolute HTTP(S) URL")
+            if not self.ollama_model.strip():
+                raise ValueError("Ollama model must not be empty")
         if self.payment_mode == "x402":
             if self.x402_pay_to == "0x0000000000000000000000000000000000000000":
                 raise ValueError("x402 requires a non-placeholder receiving wallet")

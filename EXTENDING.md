@@ -60,141 +60,27 @@ limited-value settlement procedure.
 
 ## Worked example: chat through Ollama
 
-This example exposes `POST /chat`. It uses Ollama's native `POST /api/chat`
-endpoint with streaming disabled so the public FetchHarbor response remains one
-bounded JSON document.
+`POST /chat` is now a built-in optional capability. Its implementation in
+`src/fetchharbor/services/chat.py` is the reference adapter for a service backed
+by another container. It uses Ollama's native `POST /api/chat` endpoint with
+streaming and model thinking disabled so FetchHarbor returns one bounded JSON
+document.
 
-Create `src/fetchharbor/services/chat.py`:
+The service demonstrates the production contract directly:
 
-```python
-import asyncio
-import os
+- it is registered, advertised and x402-protected only when explicitly enabled;
+- request characters, generated tokens, concurrent generations, queue time and
+  provider time are bounded by typed settings;
+- provider errors are converted into stable `502`, `503`, or `504` responses;
+- the provider response is validated before any value is returned to the client;
+- proxy environment variables are ignored for the private container-to-container
+  call; and
+- its price is configurable in `.env` and the admin dashboard.
 
-import httpx
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-
-from ..registry import ServiceDefinition
-
-router = APIRouter()
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
-CHAT_SLOTS = asyncio.Semaphore(int(os.getenv("OLLAMA_MAX_CONCURRENCY", "2")))
-
-
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=8_000)
-
-
-class ChatResponse(BaseModel):
-    status: str
-    model: str
-    response: str
-    prompt_tokens: int | None = None
-    response_tokens: int | None = None
-
-
-async def ollama_chat(message: str) -> ChatResponse:
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": [{"role": "user", "content": message}],
-        "stream": False,
-        "think": False,
-        "keep_alive": "5m",
-        "options": {"num_predict": 512},
-    }
-    try:
-        await asyncio.wait_for(CHAT_SLOTS.acquire(), timeout=1)
-    except TimeoutError as exc:
-        raise HTTPException(503, "Chat service is busy") from exc
-
-    try:
-        async with httpx.AsyncClient(timeout=120, trust_env=False) as client:
-            result = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
-            result.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise HTTPException(504, "Chat provider timed out") from exc
-    except httpx.RequestError as exc:
-        raise HTTPException(503, "Chat provider is unavailable") from exc
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(502, "Chat provider rejected the request") from exc
-    finally:
-        CHAT_SLOTS.release()
-
-    try:
-        body = result.json()
-        return ChatResponse(
-            status="success",
-            model=body.get("model", OLLAMA_MODEL),
-            response=body["message"]["content"],
-            prompt_tokens=body.get("prompt_eval_count"),
-            response_tokens=body.get("eval_count"),
-        )
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(502, "Chat provider returned an invalid response") from exc
-
-
-@router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
-    return await ollama_chat(request.message)
-
-
-definition = ServiceDefinition(
-    name="chat",
-    path="/chat",
-    methods=("POST",),
-    price_usdc="0.01",
-    description="Return a bounded chat response from the configured model.",
-    router=router,
-    input_schema={
-        "type": "object",
-        "properties": {
-            "message": {"type": "string", "minLength": 1, "maxLength": 8000}
-        },
-        "required": ["message"],
-        "additionalProperties": False,
-    },
-    output_example={
-        "status": "success",
-        "model": "llama3.2:3b",
-        "response": "Hello! How can I help?",
-        "prompt_tokens": 14,
-        "response_tokens": 8,
-    },
-)
-```
-
-Register it in `src/fetchharbor/services/__init__.py`:
-
-```python
-from .chat import definition as chat
-from .html_to_md import definition as html_to_md
-from .pdf_parse import definition as pdf_parse
-from .scrape import definition as scrape
-
-BUILTIN_SERVICES = (scrape, html_to_md, pdf_parse, chat)
-```
-
-For an operator-configurable price, add this field to `Settings`:
-
-```python
-price_chat_usdc: str = "0.01"
-```
-
-and add this inert example to `.env.example`:
-
-```dotenv
-FETCHHARBOR_PRICE_CHAT_USDC=0.01
-OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=llama3.2:3b
-OLLAMA_MAX_CONCURRENCY=2
-```
-
-`service_price()` automatically maps the service name `chat` to
-`price_chat_usdc`. To make the price editable in the admin dashboard, also add a
-validated `price_chat_usdc` field to `AdminConfiguration` and include it in
-`RESTART_REQUIRED_FIELDS`. Pricing changes require restart because the payment
-middleware is built at startup.
+Configure it through the `FETCHHARBOR_OLLAMA_*` settings documented in
+`.env.example`. Set `FETCHHARBOR_OLLAMA_ENABLED=true` to include the service at
+the next application start. Pricing changes also require restart because the
+payment middleware is built at startup.
 
 ### Start and prepare Ollama
 
