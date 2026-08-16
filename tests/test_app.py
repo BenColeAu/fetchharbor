@@ -171,6 +171,15 @@ def test_security_headers_are_applied() -> None:
     response = client.get("/health")
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
+    assert "cdn.jsdelivr.net" not in response.headers["content-security-policy"]
+
+
+def test_api_docs_csp_allows_only_its_required_external_assets() -> None:
+    response = client.get("/docs")
+    policy = response.headers["content-security-policy"]
+    assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in policy
+    assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in policy
+    assert "connect-src 'self'" in policy
 
 
 def test_public_openapi_does_not_advertise_admin_capabilities() -> None:
