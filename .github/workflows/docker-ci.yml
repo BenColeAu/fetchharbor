@@ -109,6 +109,34 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+      - name: Exercise production network topology
+        env:
+          FETCHHARBOR_ENV: production
+          FETCHHARBOR_PUBLIC_HOST: fetchharbor.example.com
+          FETCHHARBOR_ADMIN_HOST: admin.fetchharbor.example.com
+        run: |
+          set -euo pipefail
+          docker compose -p fetchharbor-prod-ci \
+            -f compose.yaml -f compose.production.yaml \
+            up --build --wait --wait-timeout 120 api egress-proxy
+
+          api_container=fetchharbor-prod-ci-api-1
+          test "$(docker inspect --format '{{json .NetworkSettings.Networks}}' "${api_container}" \
+            | python -c 'import json,sys; print(len(json.load(sys.stdin)))')" = '1'
+          test "$(docker inspect --format '{{json .NetworkSettings.Ports}}' "${api_container}")" = '{"8080/tcp":null}'
+          docker exec "${api_container}" test -w /app/data
+          docker exec "${api_container}" python -c \
+            "import httpx; response=httpx.get('http://127.0.0.1:8080/health/ready', headers={'Host':'localhost'}, trust_env=False); response.raise_for_status(); assert response.json()['status'] == 'ready'"
+          docker exec "${api_container}" python -c \
+            "import httpx; response=httpx.get('http://127.0.0.1:8080/scrape', params={'url':'https://example.com/'}, headers={'Host':'localhost'}, timeout=30, trust_env=False); response.raise_for_status(); assert response.json()['status'] == 'success'"
+
+      - name: Tear down production topology
+        if: always()
+        run: |
+          docker compose -p fetchharbor-prod-ci \
+            -f compose.yaml -f compose.production.yaml \
+            down --volumes --remove-orphans
+
       - name: Start the Compose API
         run: docker compose up --build --wait --wait-timeout 120 api
 
@@ -155,4 +183,8 @@ jobs:
 
       - name: Tear down test stack
         if: always()
-        run: docker compose down --volumes --remove-orphans
+        run: |
+          docker compose down --volumes --remove-orphans
+          docker compose -p fetchharbor-prod-ci \
+            -f compose.yaml -f compose.production.yaml \
+            down --volumes --remove-orphans

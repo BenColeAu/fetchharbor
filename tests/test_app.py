@@ -1,8 +1,11 @@
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from fetchharbor.admin.store import AdminConfiguration, ConfigurationStore
 from fetchharbor.config import Settings
 from fetchharbor.main import app, settings
+from fetchharbor.services.scrape import _validate_public_url
 
 client = TestClient(app)
 
@@ -130,3 +133,14 @@ def test_admin_dashboard_escapes_dynamic_values() -> None:
         assert "${esc(c.public_url)}" in response.text
     finally:
         settings.admin_enabled = previous_enabled
+
+
+def test_enforced_proxy_owns_destination_dns_validation() -> None:
+    previous_required = settings.require_outbound_proxy
+    settings.require_outbound_proxy = True
+    try:
+        with patch("fetchharbor.services.scrape.socket.getaddrinfo") as resolver:
+            _validate_public_url("https://example.com/")
+            resolver.assert_not_called()
+    finally:
+        settings.require_outbound_proxy = previous_required
