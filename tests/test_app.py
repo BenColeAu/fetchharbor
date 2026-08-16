@@ -115,6 +115,27 @@ def test_html_to_markdown_get_contract() -> None:
     assert response.json()["markdown"] == "# Hello"
 
 
+def test_service_routes_reject_unsupported_methods_consistently() -> None:
+    for path, allowed in {
+        "/scrape": "GET, POST",
+        "/html-to-md": "GET, POST",
+        "/pdf-parse": "GET, POST",
+    }.items():
+        for method in ("HEAD", "PUT", "PATCH", "DELETE", "TRACE"):
+            response = client.request(method, path)
+            assert response.status_code == 405
+            assert response.headers["allow"] == allowed
+            assert response.headers["x-content-type-options"] == "nosniff"
+            if method != "HEAD":
+                assert response.json() == {"detail": "Method not allowed"}
+
+
+def test_unknown_service_path_does_not_disclose_method_policy() -> None:
+    response = client.head("/not-an-enabled-capability")
+    assert response.status_code == 404
+    assert "allow" not in response.headers
+
+
 def test_discovery_contains_six_route_entries() -> None:
     response = client.get("/.well-known/x402.json")
     assert response.status_code == 200
@@ -295,10 +316,16 @@ def test_admin_host_is_enforced_by_the_application() -> None:
     settings.admin_enabled, settings.admin_host = True, "testserver"
     try:
         assert client.get("/admin", headers={"Host": "localhost"}).status_code == 404
+        assert client.get("/admin/", headers={"Host": "localhost"}).status_code == 404
         assert (
             client.get("/admin", headers={"Host": settings.admin_host}).status_code
             == 200
         )
+        trailing_slash = client.get(
+            "/admin/", headers={"Host": settings.admin_host}, follow_redirects=False
+        )
+        assert trailing_slash.status_code == 307
+        assert trailing_slash.headers["location"] == "/admin"
     finally:
         settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
 
