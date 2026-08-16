@@ -36,6 +36,7 @@ jobs:
           {
             echo 'FETCHHARBOR_ENV=test'
             echo 'FETCHHARBOR_ADMIN_ENABLED=true'
+            echo 'FETCHHARBOR_ADMIN_HOST='
             echo 'FETCHHARBOR_ADMIN_TOKEN=ci-only-admin-token-with-at-least-32-characters'
             echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1'
           } >> .env
@@ -45,9 +46,20 @@ jobs:
           docker compose config --quiet
           mkdir -p secrets
           printf '%s' 'ci-only-admin-token-with-at-least-32-characters' > secrets/admin_token.txt
+          printf '%s' 'ci-validation-key-id' > secrets/cdp_api_key_id.txt
+          printf '%s' 'ci-validation-key-secret' > secrets/cdp_api_key_secret.txt
+          printf '%s' 'ci-validation-tunnel-token' > secrets/cloudflare_tunnel_token.txt
           FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
           FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml config --quiet
+          FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            docker compose -f compose.yaml -f compose.production.yaml \
+              -f compose.mainnet.yaml config --quiet
+          FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            docker compose -f compose.yaml -f compose.production.yaml \
+              -f compose.cloudflare-tunnel.yaml config --quiet
 
       - name: Run tests in the image
         run: |

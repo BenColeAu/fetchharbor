@@ -1,7 +1,43 @@
 from decimal import Decimal
+from urllib.parse import urlparse
 
 from .config import Settings
 from .registry import ServiceRegistry
+
+
+class CdpFacilitatorAuth:
+    """Create short-lived, request-bound CDP bearer tokens for x402 calls."""
+
+    def __init__(self, facilitator_url: str, api_key_id: str, api_key_secret: str):
+        parsed = urlparse(facilitator_url)
+        self.host = parsed.netloc
+        self.base_path = parsed.path.rstrip("/")
+        self.api_key_id = api_key_id
+        self.api_key_secret = api_key_secret
+
+    def _authorization(self, method: str, endpoint: str) -> dict[str, str]:
+        from cdp.auth.utils.jwt import JwtOptions, generate_jwt
+
+        token = generate_jwt(
+            JwtOptions(
+                api_key_id=self.api_key_id,
+                api_key_secret=self.api_key_secret,
+                request_method=method,
+                request_host=self.host,
+                request_path=f"{self.base_path}/{endpoint}",
+                expires_in=120,
+            )
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    def get_auth_headers(self):
+        from x402.http import AuthHeaders
+
+        return AuthHeaders(
+            verify=self._authorization("POST", "verify"),
+            settle=self._authorization("POST", "settle"),
+            supported=self._authorization("GET", "supported"),
+        )
 
 
 def install_x402(app, registry: ServiceRegistry, settings: Settings) -> None:
@@ -16,8 +52,18 @@ def install_x402(app, registry: ServiceRegistry, settings: Settings) -> None:
     from x402.schemas import AssetAmount
     from x402.server import x402ResourceServer
 
+    auth_provider = None
+    if settings.x402_facilitator_auth == "cdp":
+        auth_provider = CdpFacilitatorAuth(
+            settings.x402_facilitator,
+            settings.resolved_cdp_api_key_id(),
+            settings.resolved_cdp_api_key_secret(),
+        )
+        # Parse the signing key and prove request-bound JWT generation before
+        # the server begins accepting traffic. No network request is made.
+        auth_provider.get_auth_headers()
     facilitator = HTTPFacilitatorClient(
-        FacilitatorConfig(url=settings.x402_facilitator)
+        FacilitatorConfig(url=settings.x402_facilitator, auth_provider=auth_provider)
     )
     server = x402ResourceServer(facilitator)
     if settings.x402_network.startswith("eip155:"):

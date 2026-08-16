@@ -55,6 +55,9 @@ Payment and operator settings are customisable without editing source code:
 | `FETCHHARBOR_X402_ASSET_VERSION` | Payment asset signature-domain version |
 | `FETCHHARBOR_X402_ASSET_DECIMALS` | Conversion between displayed and atomic prices |
 | `FETCHHARBOR_X402_FACILITATOR` | Settlement facilitator |
+| `FETCHHARBOR_X402_FACILITATOR_AUTH` | `none` or short-lived `cdp` JWT authentication |
+| `FETCHHARBOR_X402_CDP_API_KEY_ID_FILE` | Mounted CDP key-ID secret |
+| `FETCHHARBOR_X402_CDP_API_KEY_SECRET_FILE` | Mounted CDP signing-key secret |
 | `FETCHHARBOR_PRICE_SCRAPE_USDC` | Scrape price |
 | `FETCHHARBOR_PRICE_HTML_TO_MD_USDC` | HTML conversion price |
 | `FETCHHARBOR_PRICE_PDF_PARSE_USDC` | PDF parsing price |
@@ -80,3 +83,5 @@ No Prometheus, Grafana, Redis or PostgreSQL services are included. Built-in boun
 Set `FETCHHARBOR_ADMIN_ENABLED=true`, supply a strong token (preferably with `FETCHHARBOR_ADMIN_TOKEN_FILE`), and open `/admin`. The consolidated dashboard provides process/host and per-route monitoring, editable allow-listed runtime settings, service pricing, security posture checks, and a payload-free configuration audit trail. Pricing changes are persisted for the next restart so discovery metadata and payment enforcement cannot disagree during a running process.
 
 Admin is disabled by default. Do not publish it directly to the internet; place it behind a VPN, private ingress, or an additional identity-aware proxy. See [PRODUCTION.md](PRODUCTION.md) for release blockers and deployment requirements.
+
+The optional `compose.cloudflare-tunnel.yaml` overlay replaces direct Caddy ingress with a pinned, outbound-only Cloudflare Tunnel connector. The optional `compose.mainnet.yaml` overlay mounts CDP facilitator credentials without placing them in `.env`. See [PRODUCTION.md](PRODUCTION.md) for the exact release sequence.

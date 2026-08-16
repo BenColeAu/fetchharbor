@@ -1,0 +1,12 @@
+services:
+  api:
+    secrets: [admin_token, cdp_api_key_id, cdp_api_key_secret]
+    environment:
+      FETCHHARBOR_X402_CDP_API_KEY_ID_FILE: /run/secrets/cdp_api_key_id
+      FETCHHARBOR_X402_CDP_API_KEY_SECRET_FILE: /run/secrets/cdp_api_key_secret
+
+secrets:
+  cdp_api_key_id:
+    file: ${FETCHHARBOR_CDP_API_KEY_ID_SECRET_FILE:-./secrets/cdp_api_key_id.txt}
+  cdp_api_key_secret:
+    file: ${FETCHHARBOR_CDP_API_KEY_SECRET_FILE:-./secrets/cdp_api_key_secret.txt}

@@ -24,6 +24,34 @@ def test_x402_rejects_placeholder_wallet() -> None:
         raise AssertionError("x402 accepted the placeholder wallet")
 
 
+def test_base_mainnet_rejects_testnet_facilitator() -> None:
+    try:
+        Settings(
+            payment_mode="x402",
+            x402_network="eip155:8453",
+            x402_pay_to="0x1111111111111111111111111111111111111111",
+        )
+    except ValueError as exc:
+        assert "testnet-only" in str(exc)
+    else:
+        raise AssertionError("Base mainnet accepted the testnet facilitator")
+
+
+def test_base_mainnet_cdp_facilitator_requires_authentication() -> None:
+    try:
+        Settings(
+            payment_mode="x402",
+            x402_network="eip155:8453",
+            x402_pay_to="0x1111111111111111111111111111111111111111",
+            x402_asset="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            x402_facilitator="https://api.cdp.coinbase.com/platform/v2/x402",
+        )
+    except ValueError as exc:
+        assert "authentication" in str(exc)
+    else:
+        raise AssertionError("Base mainnet CDP facilitator accepted missing authentication")
+
+
 def test_production_proxy_guard_fails_closed() -> None:
     try:
         Settings(env="production", require_outbound_proxy=True, outbound_proxy_url="")
@@ -133,6 +161,16 @@ def test_admin_dashboard_escapes_dynamic_values() -> None:
         assert "${esc(c.public_url)}" in response.text
     finally:
         settings.admin_enabled = previous_enabled
+
+
+def test_admin_host_is_enforced_by_the_application() -> None:
+    previous_enabled, previous_host = settings.admin_enabled, settings.admin_host
+    settings.admin_enabled, settings.admin_host = True, "testserver"
+    try:
+        assert client.get("/admin", headers={"Host": "localhost"}).status_code == 404
+        assert client.get("/admin", headers={"Host": settings.admin_host}).status_code == 200
+    finally:
+        settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
 
 
 def test_enforced_proxy_owns_destination_dns_validation() -> None:
