@@ -71,6 +71,15 @@ Stop or quiesce the API before taking a filesystem-level backup of the `fetchhar
 
 Never commit `.env`. Prefer Compose secrets or an external secret manager. The application never returns the admin token, wallet credentials, facilitator credentials, or environment contents through admin APIs.
 
+The admin token is exchanged for a signed, HttpOnly, SameSite=Strict browser
+session. In production the cookie is Secure, limited to `/admin`, and expires
+after 15 minutes by default; change the bounded lifetime with
+`FETCHHARBOR_ADMIN_SESSION_TTL_SECONDS`. The token is cleared from the sign-in
+field and is not stored in browser storage. Cookie-authenticated changes also
+require the exact HTTPS admin origin, while automation may continue to send the
+admin token header directly. Use Logout on shared devices and keep Cloudflare
+Access or an equivalent identity layer in front of the admin hostname.
+
 ## Release gate
 
 A production release should require passing unit/integration tests, a real testnet verify-and-settle test for every paid route, container build and health-check validation, dependency and image scanning, reverse-proxy/TLS validation, backup restoration, and a rollback exercise.
