@@ -20,6 +20,11 @@ def _validate_public_url(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise HTTPException(400, "Only HTTP(S) URLs are supported")
+    if get_settings().require_outbound_proxy:
+        # The production proxy performs destination DNS resolution and applies
+        # independent private/reserved-address ACLs. The API intentionally has
+        # no direct external DNS or network route in that topology.
+        return
     try:
         addresses = socket.getaddrinfo(parsed.hostname, parsed.port or 443)
     except socket.gaierror as exc:
