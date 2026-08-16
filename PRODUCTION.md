@@ -83,6 +83,13 @@ The automated gates do not replace host-specific release work. Before accepting 
 
 ## Administrator release runbook
 
+The admin control plane can save the EVM receiving wallet under **Payment
+Settlement**. The value is validated, persisted and audited, but deliberately
+does not change the running payment middleware. Confirm the complete address,
+network and asset independently, then restart FetchHarbor and verify that the
+panel reports the wallet as active before accepting paid traffic. Changing the
+receiving wallet does not configure facilitator credentials or enable x402.
+
 ### 1. Domain and TLS
 
 The administrator owns DNS, certificates and renewal monitoring. For direct ingress, set `FETCHHARBOR_PUBLIC_HOST`, `FETCHHARBOR_ADMIN_HOST`, `FETCHHARBOR_PUBLIC_URL` and `FETCHHARBOR_ALLOWED_HOSTS`, then start `compose.production.yaml`. Caddy obtains and renews certificates automatically; preserve both Caddy volumes and alert on certificate or renewal errors.
@@ -92,6 +99,12 @@ For Cloudflare Tunnel, create a remotely managed tunnel in Cloudflare Zero Trust
 - the public API hostname to `http://api:8080`
 - the admin hostname to `http://api:8080`, protected by a Cloudflare Access policy
 
+Keep both names at the same DNS depth unless the zone has a certificate that
+explicitly covers deeper names. For example, use `fetchharbor.example.com` and
+`fetchharbor-admin.example.com`; a standard `*.example.com` certificate does not
+cover `admin.fetchharbor.example.com`. Verify both TLS handshakes before removing
+the direct-ingress fallback.
+
 Put only the tunnel token in `secrets/cloudflare_tunnel_token.txt`, set the same host values in `.env`, and start:
 
 ```bash
@@ -99,6 +112,31 @@ docker compose -f compose.yaml -f compose.production.yaml -f compose.cloudflare-
 ```
 
 The Cloudflare overlay places the direct Caddy ingress behind the inactive `direct-ingress` profile, publishes no host ports, and runs `cloudflared` from an immutable image digest. FetchHarbor also rejects admin routes unless the request host exactly matches `FETCHHARBOR_ADMIN_HOST`. Do not disable that check. If Cloudflare Browser Integrity Check or another WAF rule blocks non-browser API clients, add a narrowly scoped API-path exception rather than disabling zone-wide protection.
+
+#### Cloudflare edge hardening
+
+The tunnel prevents direct origin access, but it does not by itself decide whether
+an HTTP request is malicious. Enable Cloudflare's **Free Managed Ruleset** for the
+zone so known exploit probes are rejected before they reach FetchHarbor. Review
+Security Events after enabling it and tune only a specific false positive; do not
+create broad bypasses for the whole API or hostname.
+
+Add rate limits for the resource-consuming public operations (`/scrape`,
+`/pdf-parse`, `/html-to-md`, and `/chat`). Start with thresholds based on a short
+load test and expected client behaviour, use a blocking response for clearly
+abusive excess traffic, and review events before tightening them. Cloudflare's
+free plan provides one rate-limiting rule, so group those paths in that rule when
+necessary. Keep the admin hostname behind Cloudflare Access as well as the
+application token.
+
+Do not enable plain Bot Fight Mode without testing every API client. FetchHarbor
+is intentionally called by software and agents, and that mode cannot be scoped
+with skip rules. Managed WAF rules and endpoint rate limits are the safer default
+for this API. Avoid keyword-based filters for strings such as SQL or JavaScript:
+those strings can be legitimate scrape, conversion, or chat inputs. The
+application already bounds inputs and downloads, rejects private-network fetches,
+revalidates redirects, limits Ollama concurrency and execution time, and routes
+production fetches through the private-destination-blocking egress proxy.
 
 ### 2. Host firewall
 
@@ -158,3 +196,6 @@ Do not run `scripts/x402_settlement_test.py` with a funded mainnet wallet during
 - [CDP x402 troubleshooting](https://docs.cdp.coinbase.com/x402/support/troubleshooting)
 - [Cloudflare Tunnel firewall requirements](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/tunnel-with-firewall/)
 - [Cloudflare remotely managed tunnel setup](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/)
+- [Cloudflare managed rules](https://developers.cloudflare.com/waf/managed-rules/)
+- [Cloudflare WAF feature order](https://developers.cloudflare.com/waf/feature-interoperability/)
+- [OWASP API4: Unrestricted Resource Consumption](https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/)

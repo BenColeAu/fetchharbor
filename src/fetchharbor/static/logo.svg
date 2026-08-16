@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 286 64" role="img" aria-label="FetchHarbor logo">
+  <defs><linearGradient id="g" x1="8" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#66c7ff"/><stop offset="1" stop-color="#62e6bd"/></linearGradient></defs>
+  <rect width="64" height="64" rx="15" fill="#07141d"/>
+  <path d="M16 16h34v8H25v8h20v8H25v16h-9z" fill="url(#g)"/>
+  <path d="M36 40h14v6c0 7-5 12-12 12H27v-7h11c3 0 5-2 5-5h-7z" fill="#ffd38a"/>
+  <text x="78" y="42" fill="#62e6bd" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="800" letter-spacing="-1">Fetch</text>
+  <text x="151" y="42" fill="#eaf2f7" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="800" letter-spacing="-1">Harbor</text>
+</svg>

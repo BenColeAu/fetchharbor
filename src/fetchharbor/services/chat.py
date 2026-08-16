@@ -94,7 +94,7 @@ async def ollama_chat(message: str) -> ChatResponse:
     )
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, summary="chat", operation_id="chat")
 async def chat(request: ChatRequest) -> ChatResponse:
     return await ollama_chat(request.message)
 
