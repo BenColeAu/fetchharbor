@@ -1,6 +1,10 @@
 import os
 import subprocess
 import sys
+from unittest.mock import patch
+
+from fetchharbor.config import Settings
+from fetchharbor.mainnet_preflight import load_effective_settings
 
 
 def test_x402_enabled_application_starts() -> None:
@@ -29,3 +33,31 @@ assert 'payment-required' in response.headers
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_mainnet_preflight_applies_admin_persisted_configuration(tmp_path) -> None:
+    config_path = tmp_path / "admin-config.json"
+    config_path.write_text(
+        """{
+  "payment_mode": "x402",
+  "x402_network": "eip155:8453",
+  "x402_asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "x402_pay_to": "0x1111111111111111111111111111111111111111",
+  "x402_facilitator": "https://api.cdp.coinbase.com/platform/v2/x402",
+  "x402_facilitator_auth": "cdp"
+}""",
+        encoding="utf-8",
+    )
+    configured = Settings(
+        env="test",
+        admin_config_path=config_path,
+        x402_cdp_api_key_id="test-key-id",
+        x402_cdp_api_key_secret="test-key-secret",
+    )
+
+    with patch("fetchharbor.mainnet_preflight.get_settings", return_value=configured):
+        effective = load_effective_settings()
+
+    assert effective.payment_mode == "x402"
+    assert effective.x402_network == "eip155:8453"
+    assert effective.x402_pay_to == "0x1111111111111111111111111111111111111111"
