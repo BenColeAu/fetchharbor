@@ -42,6 +42,23 @@ download overlay publishes no port and must be removed by the subsequent forced
 recreation; verify Ollama then has only the `internal` network. Size CPU, RAM,
 disk and any accelerator for the selected model and expected concurrency.
 
+### NVIDIA GPU acceleration
+
+On a host with a compatible NVIDIA driver and NVIDIA Container Toolkit, add
+`compose.gpu.yaml` to the steady-state command:
+
+```bash
+docker compose -f compose.yaml -f compose.production.yaml \
+  -f compose.gpu.yaml --profile ollama up -d
+```
+
+The overlay reserves one GPU for Ollama without publishing its API port. Verify
+acceleration with `docker compose ... exec ollama ollama ps` while a request is
+running; its `PROCESSOR` column should report GPU use. Omit the overlay to retain
+CPU operation. An 8 GB GPU is suitable for the included 3B model, but model size,
+context length and concurrent requests all consume VRAM; load-test larger models
+before changing the production default.
+
 Resource metrics describe the container-visible process and host values. Container quota interpretation varies by runtime, so production alerts should use the Docker/VM monitoring system as the authoritative source.
 
 FetchHarbor blocks private, loopback and link-local destinations and revalidates every redirect. The production Compose overlay also removes the API's direct edge attachment and sends outbound traffic through Squid, which independently blocks private, local, metadata and reserved ranges. Operators should additionally enforce VM firewall rules so Docker configuration changes cannot bypass this boundary.
