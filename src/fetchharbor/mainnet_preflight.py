@@ -1,13 +1,21 @@
 """Validate Base mainnet configuration and facilitator access without settling funds."""
 
-from .config import get_settings
+from .admin.store import ConfigurationStore
+from .config import Settings, get_settings
 from .payments import CdpFacilitatorAuth
+
+
+def load_effective_settings() -> Settings:
+    """Apply the same validated persisted configuration as application startup."""
+    settings = get_settings()
+    ConfigurationStore(settings)
+    return settings
 
 
 def main() -> None:
     from x402.http import FacilitatorConfig, HTTPFacilitatorClient
 
-    settings = get_settings()
+    settings = load_effective_settings()
     if settings.payment_mode != "x402":
         raise RuntimeError("payment mode must be x402")
     if settings.x402_network != "eip155:8453":

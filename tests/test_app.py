@@ -4,6 +4,7 @@ from unittest.mock import patch
 import httpx
 from fastapi.testclient import TestClient
 
+from fetchharbor.admin.metrics import MetricsStore
 from fetchharbor.admin.store import AdminConfiguration, ConfigurationStore
 from fetchharbor.config import Settings
 from fetchharbor.main import app, settings
@@ -502,8 +503,23 @@ def test_admin_dashboard_escapes_dynamic_values() -> None:
         assert response.headers["cache-control"].startswith("no-store")
         assert 'id="token" type="password"' in response.text
         assert 'autocomplete="off"' in response.text
+        assert "Recent incoming requests" in response.text
+        assert "refreshed every 10 seconds" in response.text
+        assert "o.metrics.recent" in response.text
     finally:
         settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
+
+
+def test_recent_request_monitoring_is_bounded_and_payload_free() -> None:
+    monitoring = MetricsStore()
+    for index in range(125):
+        monitoring.record("GET", f"/route-{index}", 200, 1.25)
+
+    recent = monitoring.snapshot()["recent"]
+    assert len(recent) == 100
+    assert recent[0]["route"] == "GET /route-124"
+    assert set(recent[0]) == {"route", "status", "duration_ms", "at"}
+    assert all("query" not in event and "body" not in event for event in recent)
 
 
 def test_invalid_facilitator_secret_is_not_reflected(tmp_path) -> None:
