@@ -54,7 +54,6 @@ async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
     return JSONResponse({"detail": "Not Found"}, status_code=404)
 
 
-@app.middleware("http")
 async def security_headers(request: Request, call_next):
     allowed_methods = service_methods.get(request.url.path)
     if allowed_methods and request.method not in allowed_methods:
@@ -96,6 +95,9 @@ async def security_headers(request: Request, call_next):
 for service in registry.services:
     app.include_router(service.router, tags=[service.name])
 install_x402(app, registry, settings)
+# Register this after x402 so it remains outside middleware-generated 402
+# responses as well as ordinary application responses.
+app.middleware("http")(security_headers)
 app.include_router(build_admin_router(settings, registry, metrics, configuration_store))
 
 

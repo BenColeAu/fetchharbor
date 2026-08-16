@@ -112,6 +112,7 @@ definition = ServiceDefinition(
         "required": ["url"],
         "additionalProperties": False,
     },
+    input_example={"url": "https://example.com"},
     output_example={
         "status": "success",
         "url": "https://example.com",

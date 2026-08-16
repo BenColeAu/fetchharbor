@@ -66,6 +66,8 @@ definition = ServiceDefinition(
         "type": "object",
         "properties": {"url": {"type": "string", "format": "uri"}},
     },
+    input_example={"url": "https://example.com/document.pdf"},
+    body_types={"POST": "form-data"},
     output_example={
         "status": "success",
         "text": "...",

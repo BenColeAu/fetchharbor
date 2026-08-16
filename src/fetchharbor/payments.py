@@ -2,6 +2,7 @@ from decimal import Decimal
 from urllib.parse import urlparse
 
 from .config import Settings
+from .discovery import bazaar_extensions
 from .registry import ServiceRegistry
 
 
@@ -95,7 +96,9 @@ def install_x402(app, registry: ServiceRegistry, settings: Settings) -> None:
                         max_timeout_seconds=settings.x402_max_timeout_seconds,
                     )
                 ],
+                resource=f"{settings.public_url.rstrip('/')}{service.path}",
                 mime_type="application/json",
                 description=service.description,
+                extensions=bazaar_extensions(service, method),
             )
     app.add_middleware(PaymentMiddlewareASGI, routes=routes, server=server)

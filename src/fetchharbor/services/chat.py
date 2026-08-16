@@ -114,6 +114,7 @@ definition = ServiceDefinition(
         "required": ["message"],
         "additionalProperties": False,
     },
+    input_example={"message": "Explain this topic briefly."},
     output_example={
         "status": "success",
         "model": "llama3.2:3b",
