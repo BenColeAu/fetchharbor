@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .admin.metrics import metrics, monitoring_middleware
 from .admin.router import build_admin_router
@@ -36,6 +37,21 @@ service_methods = {
     service.path: tuple(method.upper() for method in service.methods)
     for service in registry.services
 }
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+    if exc.status_code != 404:
+        return JSONResponse(
+            {"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers
+        )
+    accepts_html = "text/html" in request.headers.get("accept", "")
+    if accepts_html and request.method != "HEAD":
+        return HTMLResponse(
+            """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/static/favicon.svg"><title>404 · FetchHarbor</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08111d;color:#e8f0f7;font:16px system-ui}.card{max-width:560px;padding:40px;border:1px solid #294057;border-radius:16px;background:#101d2c;text-align:center}h1{font-size:64px;margin:0;color:#43d6b5}a{color:#43d6b5}</style></head><body><main class="card"><img src="/static/logo.svg" alt="FetchHarbor" width="210"><h1>404</h1><p>This harbor does not have a route at that address.</p><a href="/">Return to FetchHarbor</a></main></body></html>""",
+            status_code=404,
+        )
+    return JSONResponse({"detail": "Not Found"}, status_code=404)
 
 
 @app.middleware("http")

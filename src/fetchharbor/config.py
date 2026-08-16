@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     admin_host: str = ""
     admin_token: str = ""
     admin_token_file: Path | None = None
+    admin_session_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     admin_config_path: Path = Path("data/admin-config.json")
     audit_log_path: Path = Path("data/admin-audit.jsonl")
     security_headers_enabled: bool = True

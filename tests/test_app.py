@@ -146,6 +146,23 @@ def test_unknown_service_path_does_not_disclose_method_policy() -> None:
     assert "allow" not in response.headers
 
 
+def test_unknown_api_route_returns_json_404() -> None:
+    response = client.get(
+        "/not-an-enabled-capability", headers={"Accept": "application/json"}
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}
+
+
+def test_unknown_browser_route_returns_branded_html_404() -> None:
+    response = client.get("/not-an-enabled-capability", headers={"Accept": "text/html"})
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+    assert "FetchHarbor" in response.text
+    assert "<h1>404</h1>" in response.text
+    assert "admin" not in response.text.lower()
+
+
 def test_scrape_timeout_fails_closed() -> None:
     with patch(
         "fetchharbor.services.scrape.httpx.AsyncClient",
@@ -220,6 +237,74 @@ def test_admin_requires_token_when_enabled() -> None:
             previous_token,
             previous_host,
         )
+
+
+def test_admin_session_survives_refresh_and_protects_mutations() -> None:
+    previous = (
+        settings.admin_enabled,
+        settings.admin_token,
+        settings.admin_host,
+        settings.env,
+    )
+    settings.admin_enabled = True
+    settings.admin_token = "a-secure-test-token-that-is-long-enough"
+    settings.admin_host = "testserver"
+    settings.env = "test"
+    try:
+        with TestClient(app) as session_client:
+            login = session_client.post(
+                "/admin/api/session",
+                headers={"X-Admin-Token": settings.admin_token},
+            )
+            assert login.status_code == 200
+            cookie = login.headers["set-cookie"]
+            assert "HttpOnly" in cookie
+            assert "SameSite=strict" in cookie
+            assert "Path=/admin" in cookie
+
+            refreshed = session_client.get("/admin/api/overview")
+            assert refreshed.status_code == 200
+            assert "set-cookie" in refreshed.headers
+
+            rejected = session_client.put(
+                "/admin/api/configuration", json={"request_timeout_seconds": 30}
+            )
+            assert rejected.status_code == 403
+
+            accepted = session_client.put(
+                "/admin/api/configuration",
+                headers={"Origin": "http://testserver"},
+                json={"request_timeout_seconds": 30},
+            )
+            assert accepted.status_code == 200
+
+            signed_out = session_client.delete(
+                "/admin/api/session", headers={"Origin": "http://testserver"}
+            )
+            assert signed_out.status_code == 200
+            assert session_client.get("/admin/api/overview").status_code == 401
+    finally:
+        (
+            settings.admin_enabled,
+            settings.admin_token,
+            settings.admin_host,
+            settings.env,
+        ) = previous
+
+
+def test_admin_rejects_tampered_session_cookie() -> None:
+    previous = settings.admin_enabled, settings.admin_token, settings.admin_host
+    settings.admin_enabled = True
+    settings.admin_token = "a-secure-test-token-that-is-long-enough"
+    settings.admin_host = "testserver"
+    try:
+        with TestClient(app) as session_client:
+            session_client.cookies.set(
+                "fetchharbor_admin_session", "1.fake.invalid", path="/admin"
+            )
+            assert session_client.get("/admin/api/overview").status_code == 401
+    finally:
+        settings.admin_enabled, settings.admin_token, settings.admin_host = previous
 
 
 def test_security_headers_are_applied() -> None:
