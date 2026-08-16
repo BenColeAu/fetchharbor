@@ -37,7 +37,7 @@ jobs:
             echo 'FETCHHARBOR_ENV=test'
             echo 'FETCHHARBOR_ADMIN_ENABLED=true'
             echo 'FETCHHARBOR_ADMIN_TOKEN=ci-only-admin-token-with-at-least-32-characters'
-            echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1'
+            echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1,admin.fetchharbor.example.com'
           } >> .env
 
       - name: Validate Compose configuration
@@ -45,9 +45,20 @@ jobs:
           docker compose config --quiet
           mkdir -p secrets
           printf '%s' 'ci-only-admin-token-with-at-least-32-characters' > secrets/admin_token.txt
+          printf '%s' 'ci-validation-key-id' > secrets/cdp_api_key_id.txt
+          printf '%s' 'ci-validation-key-secret' > secrets/cdp_api_key_secret.txt
+          printf '%s' 'ci-validation-tunnel-token' > secrets/cloudflare_tunnel_token.txt
           FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
           FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml config --quiet
+          FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            docker compose -f compose.yaml -f compose.production.yaml \
+              -f compose.mainnet.yaml config --quiet
+          FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
+          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
+            docker compose -f compose.yaml -f compose.production.yaml \
+              -f compose.cloudflare-tunnel.yaml config --quiet
 
       - name: Run tests in the image
         run: |
@@ -128,7 +139,7 @@ jobs:
             | python -c 'import json,sys; print(len(json.load(sys.stdin)))')" = '1'
           docker inspect "${api_container}" \
             | python -c 'import json,sys; assert not json.load(sys.stdin)[0]["HostConfig"]["PortBindings"]'
-          docker exec "${api_container}" test -w /app/data
+          docker exec "${api_container}" sh -c 'test -w /app/data'
           docker exec "${api_container}" python -c \
             "import httpx; response=httpx.get('http://127.0.0.1:8080/health/ready', headers={'Host':'localhost'}, trust_env=False); response.raise_for_status(); assert response.json()['status'] == 'ready'"
           docker exec "${api_container}" python -c \
@@ -158,18 +169,21 @@ jobs:
           grep --fixed-strings '"markdown":"# Hello"' /tmp/markdown.json
 
           curl --fail --silent --show-error \
+            -H 'Host: admin.fetchharbor.example.com' \
             -H "X-Admin-Token: ${ADMIN_TOKEN}" \
             http://127.0.0.1:8080/admin/api/overview \
             | tee /tmp/admin.json
           grep --fixed-strings '"service_count":3' /tmp/admin.json
 
           status="$(curl --silent --output /tmp/x402-enable.json --write-out '%{http_code}' \
+            -H 'Host: admin.fetchharbor.example.com' \
             -X PUT -H "X-Admin-Token: ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
             --data '{"payment_mode":"x402"}' \
             http://127.0.0.1:8080/admin/api/configuration)"
           test "${status}" = '409'
 
           curl --fail --silent --show-error \
+            -H 'Host: admin.fetchharbor.example.com' \
             -H "X-Admin-Token: ${ADMIN_TOKEN}" \
             http://127.0.0.1:8080/admin/api/security \
             | tee /tmp/security.json
@@ -179,7 +193,7 @@ jobs:
         run: |
           docker compose ps
           test "$(docker inspect --format '{{.State.Health.Status}}' fetchharbor-api-1)" = 'healthy'
-          docker exec fetchharbor-api-1 test -w /app/data
+          docker exec fetchharbor-api-1 sh -c 'test -w /app/data'
 
       - name: Show logs after failure
         if: failure()

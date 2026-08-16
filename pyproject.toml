@@ -9,6 +9,7 @@ description = "A modular, self-hosted x402 content service platform"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
+  "cdp-sdk>=1.47.1,<2",
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "markdownify>=1.2,<2",

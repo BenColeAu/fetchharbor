@@ -20,9 +20,14 @@ def build_admin_router(
     router = APIRouter(prefix="/admin", tags=["admin"])
     failed_attempts: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=20))
 
+    def require_admin_host(request: Request) -> None:
+        if settings.admin_host and request.url.hostname != settings.admin_host:
+            raise HTTPException(404, "Not found")
+
     def authorize(
         request: Request, x_admin_token: str | None = Header(default=None)
     ) -> str:
+        require_admin_host(request)
         if not settings.admin_enabled:
             raise HTTPException(404, "Admin is disabled")
         actor = request.client.host if request.client else "unknown"
@@ -44,7 +49,8 @@ def build_admin_router(
         return actor
 
     @router.get("", response_class=HTMLResponse, include_in_schema=False)
-    async def dashboard() -> str:
+    async def dashboard(request: Request) -> str:
+        require_admin_host(request)
         if not settings.admin_enabled:
             raise HTTPException(404, "Admin is disabled")
         return DASHBOARD_HTML

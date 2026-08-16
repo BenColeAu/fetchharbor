@@ -21,12 +21,18 @@ class Settings(BaseSettings):
     x402_asset_decimals: int = Field(default=6, ge=0, le=18)
     x402_max_timeout_seconds: int = Field(default=300, ge=1, le=3600)
     x402_facilitator: str = "https://x402.org/facilitator"
+    x402_facilitator_auth: Literal["none", "cdp"] = "none"
+    x402_cdp_api_key_id: str = ""
+    x402_cdp_api_key_id_file: Path | None = None
+    x402_cdp_api_key_secret: str = ""
+    x402_cdp_api_key_secret_file: Path | None = None
     price_scrape_usdc: str = "0.01"
     price_html_to_md_usdc: str = "0.005"
     price_pdf_parse_usdc: str = "0.01"
     max_download_bytes: int = 20 * 1024 * 1024
     request_timeout_seconds: float = 30
     admin_enabled: bool = False
+    admin_host: str = ""
     admin_token: str = ""
     admin_token_file: Path | None = None
     admin_config_path: Path = Path("data/admin-config.json")
@@ -36,7 +42,12 @@ class Settings(BaseSettings):
     outbound_proxy_url: str = ""
     require_outbound_proxy: bool = False
 
-    @field_validator("admin_token_file", mode="before")
+    @field_validator(
+        "admin_token_file",
+        "x402_cdp_api_key_id_file",
+        "x402_cdp_api_key_secret_file",
+        mode="before",
+    )
     @classmethod
     def empty_admin_token_file_is_unset(cls, value):
         return None if value in (None, "") else value
@@ -52,6 +63,29 @@ class Settings(BaseSettings):
                 raise ValueError("x402 receiving wallet must be a 20-byte EVM address")
             if not self.x402_asset.startswith("0x") or len(self.x402_asset) != 42:
                 raise ValueError("x402 asset must be a 20-byte EVM contract address")
+            if self.x402_network == "eip155:8453":
+                if self.x402_facilitator.rstrip("/") == "https://x402.org/facilitator":
+                    raise ValueError("x402.org facilitator is testnet-only")
+                if (
+                    self.x402_facilitator.rstrip("/")
+                    == "https://api.cdp.coinbase.com/platform/v2/x402"
+                    and self.x402_facilitator_auth != "cdp"
+                ):
+                    raise ValueError(
+                        "Base mainnet CDP facilitator requires CDP authentication"
+                    )
+            if self.x402_facilitator_auth == "cdp":
+                try:
+                    key_id = self.resolved_cdp_api_key_id()
+                    key_secret = self.resolved_cdp_api_key_secret()
+                except OSError as exc:
+                    raise ValueError(
+                        "CDP facilitator credential could not be read"
+                    ) from exc
+                if not key_id or not key_secret:
+                    raise ValueError(
+                        "CDP facilitator authentication requires both credentials"
+                    )
         if (
             self.env == "production"
             and self.require_outbound_proxy
@@ -77,6 +111,16 @@ class Settings(BaseSettings):
         if self.admin_token_file:
             return self.admin_token_file.read_text(encoding="utf-8").strip()
         return self.admin_token
+
+    def resolved_cdp_api_key_id(self) -> str:
+        if self.x402_cdp_api_key_id_file:
+            return self.x402_cdp_api_key_id_file.read_text(encoding="utf-8").strip()
+        return self.x402_cdp_api_key_id.strip()
+
+    def resolved_cdp_api_key_secret(self) -> str:
+        if self.x402_cdp_api_key_secret_file:
+            return self.x402_cdp_api_key_secret_file.read_text(encoding="utf-8").strip()
+        return self.x402_cdp_api_key_secret.strip()
 
     def trusted_hosts(self) -> list[str]:
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
