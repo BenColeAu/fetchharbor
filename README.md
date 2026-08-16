@@ -37,6 +37,11 @@ docker compose --profile mcp up -d
 
 Create a module under `src/fetchharbor/services`, expose an `APIRouter` and one `ServiceDefinition`, then add it to `BUILTIN_SERVICES`. The registry adds its router, service catalog entry, x402 requirements and Bazaar discovery metadata.
 
+See [EXTENDING.md](EXTENDING.md) for the universal plug-and-play service contract,
+configuration and security checklist, testing requirements, and a complete Ollama
+chat adapter example. The same pattern supports local functions, internal
+containers, hosted APIs, databases, queues, and other providers.
+
 ## Payments
 
 FetchHarbor includes the official x402 v2 FastAPI middleware and generates its protected routes from the same service registry used by discovery. Payment remains disabled by default. The example configuration targets Base Sepolia and the signup-free testnet facilitator. Set a real receiving wallet before enabling `FETCHHARBOR_PAYMENT_MODE=x402`.
