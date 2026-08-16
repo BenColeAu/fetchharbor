@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import httpx
 from fastapi.testclient import TestClient
 
 from fetchharbor.admin.store import AdminConfiguration, ConfigurationStore
@@ -134,6 +135,30 @@ def test_unknown_service_path_does_not_disclose_method_policy() -> None:
     response = client.head("/not-an-enabled-capability")
     assert response.status_code == 404
     assert "allow" not in response.headers
+
+
+def test_scrape_timeout_fails_closed() -> None:
+    with patch(
+        "fetchharbor.services.scrape.httpx.AsyncClient",
+        side_effect=httpx.TimeoutException("controlled timeout"),
+    ):
+        response = client.get("/scrape", params={"url": "https://example.com"})
+    assert response.status_code == 504
+    assert response.json() == {"detail": "Remote request timed out"}
+
+
+def test_pdf_upload_limit_is_enforced_before_parsing() -> None:
+    previous_limit = settings.max_download_bytes
+    settings.max_download_bytes = 5
+    try:
+        response = client.post(
+            "/pdf-parse",
+            files={"file": ("oversized.pdf", b"123456", "application/pdf")},
+        )
+        assert response.status_code == 413
+        assert response.json() == {"detail": "PDF is too large"}
+    finally:
+        settings.max_download_bytes = previous_limit
 
 
 def test_discovery_contains_six_route_entries() -> None:
