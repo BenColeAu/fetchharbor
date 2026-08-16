@@ -19,7 +19,7 @@ dependencies = [
   "pypdf>=6,<7",
   "python-multipart>=0.0.20,<1",
   "uvicorn[standard]>=0.35,<1",
-  "x402[evm,fastapi]>=2,<3",
+  "x402[evm,extensions,fastapi]>=2,<3",
 ]
 
 [project.optional-dependencies]

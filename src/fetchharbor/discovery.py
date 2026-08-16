@@ -5,6 +5,25 @@ from .config import Settings
 from .registry import ServiceRegistry
 
 
+def bazaar_extensions(service, method: str) -> dict[str, Any]:
+    """Build one SDK-validated Bazaar declaration for a service method."""
+    from x402.extensions.bazaar import OutputConfig, declare_discovery_extension
+
+    body_type = service.body_types.get(method.upper())
+    if body_type is None and method.upper() in {"POST", "PUT", "PATCH"}:
+        body_type = "json"
+    extensions = declare_discovery_extension(
+        input=service.input_example,
+        input_schema=service.input_schema,
+        body_type=body_type,
+        output=OutputConfig(example=service.output_example),
+    )
+    # The HTTP middleware normally enriches this at request time. The static
+    # manifest has no request context, so declare the known route method here.
+    extensions["bazaar"]["info"]["input"]["method"] = method.upper()
+    return extensions
+
+
 def x402_manifest(registry: ServiceRegistry, settings: Settings) -> dict[str, Any]:
     resources = []
     for service in registry.services:
@@ -32,18 +51,7 @@ def x402_manifest(registry: ServiceRegistry, settings: Settings) -> dict[str, An
                             },
                         }
                     ],
-                    "extensions": {
-                        "bazaar": {
-                            "info": {
-                                "input": {"type": "http", "method": method},
-                                "output": {
-                                    "type": "json",
-                                    "example": service.output_example,
-                                },
-                            },
-                            "schema": service.input_schema,
-                        }
-                    },
+                    "extensions": bazaar_extensions(service, method),
                 }
             )
     return {"x402Version": 2, "resources": resources}

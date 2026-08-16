@@ -43,6 +43,7 @@ definition = ServiceDefinition(
         "required": ["html"],
         "additionalProperties": False,
     },
+    input_example={"html": "<h1>Hello</h1>"},
     output_example={
         "status": "success",
         "markdown": "# Hello",

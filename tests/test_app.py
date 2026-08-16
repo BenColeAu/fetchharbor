@@ -193,6 +193,10 @@ def test_discovery_contains_six_route_entries() -> None:
     assert response.status_code == 200
     assert response.json()["x402Version"] == 2
     assert len(response.json()["resources"]) == 6
+    for resource in response.json()["resources"]:
+        extension = resource["extensions"]["bazaar"]
+        assert extension["info"]["input"]["method"] in {"GET", "POST"}
+        assert extension["schema"]["$schema"].endswith("2020-12/schema")
 
 
 def test_repository_defaults_do_not_contain_original_operator_wallet() -> None:

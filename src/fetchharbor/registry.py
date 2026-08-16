@@ -16,6 +16,8 @@ class ServiceDefinition:
     router: APIRouter
     methods: tuple[str, ...] = ("GET", "POST")
     input_schema: dict[str, Any] = field(default_factory=dict)
+    input_example: dict[str, Any] = field(default_factory=dict)
+    body_types: dict[str, str] = field(default_factory=dict)
     output_example: dict[str, Any] = field(default_factory=dict)
 
 

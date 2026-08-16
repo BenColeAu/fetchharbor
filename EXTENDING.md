@@ -22,6 +22,8 @@ Every service module under `src/fetchharbor/services/` exports `definition`, a
 | `price_usdc` | Safe default price as a decimal string |
 | `router` | FastAPI router implementing every declared method/path |
 | `input_schema` | JSON Schema published in Bazaar discovery |
+| `input_example` | Safe, realistic input Bazaar can use to understand the route |
+| `body_types` | Optional per-method body type overrides such as `{"POST": "form-data"}`; body methods otherwise default to JSON |
 | `output_example` | Representative JSON response published in discovery |
 
 The definition is the source of truth. Do not add a route without declaring it,
@@ -35,7 +37,9 @@ metadata. Likewise, do not declare methods that the router does not implement.
 3. Create the FastAPI router and translate dependency failures into appropriate
    `4xx`, `502`, `503`, or `504` responses without returning credentials or raw
    internal errors.
-4. Export one `ServiceDefinition` with matching method, path, schema, and example.
+4. Export one `ServiceDefinition` with matching method, path, input schema,
+   realistic input example, and output example. Set `body_types` for non-JSON
+   body methods.
 5. Import the definition in `src/fetchharbor/services/__init__.py` and append it to
    `BUILTIN_SERVICES`.
 6. Add typed settings to `Settings` for all operator-controlled values. Add inert
@@ -53,6 +57,11 @@ curl http://localhost:8080/services
 curl http://localhost:8080/.well-known/x402.json
 curl http://localhost:8080/openapi.json
 ```
+
+Validate that the method entry in `/.well-known/x402.json` contains an
+`extensions.bazaar` declaration with the same input form clients must send. When
+payments are enabled, decode `PAYMENT-REQUIRED` and confirm the live challenge
+contains the same declaration and the configured HTTPS public resource URL.
 
 With payment disabled, exercise the handler normally. With x402 enabled, first
 make an unpaid request and confirm it returns `402`; only then use the normal
