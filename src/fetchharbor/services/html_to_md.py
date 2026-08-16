@@ -21,12 +21,12 @@ def convert(html: str) -> dict:
     }
 
 
-@router.get("/html-to-md")
+@router.get("/html-to-md", summary="html-to-md (GET)", operation_id="html_to_md_get")
 async def html_to_md_get(html: str = Query(max_length=2_000_000)) -> dict:
     return convert(html)
 
 
-@router.post("/html-to-md")
+@router.post("/html-to-md", summary="html-to-md (POST)", operation_id="html_to_md_post")
 async def html_to_md_post(request: HtmlRequest) -> dict:
     return convert(request.html)
 

@@ -90,12 +90,12 @@ async def fetch(url: str) -> dict:
     }
 
 
-@router.get("/scrape")
+@router.get("/scrape", summary="scrape (GET)", operation_id="scrape_get")
 async def scrape_get(url: str = Query()) -> dict:
     return await fetch(url)
 
 
-@router.post("/scrape")
+@router.post("/scrape", summary="scrape (POST)", operation_id="scrape_post")
 async def scrape_post(request: ScrapeRequest) -> dict:
     return await fetch(str(request.url))
 

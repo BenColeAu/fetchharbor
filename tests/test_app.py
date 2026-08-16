@@ -80,6 +80,33 @@ def test_health() -> None:
     assert client.get("/health/ready").json()["status"] == "ready"
 
 
+def test_public_landing_page_explains_the_service() -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Useful content in." in response.text
+    assert "Capabilities at this harbor" in response.text
+    assert "/.well-known/x402.json" in response.text
+    assert "/docs" in response.text
+    assert "/scrape" in response.text
+    assert "/static/logo.svg" in response.text
+    assert 'href="https://github.com/BenColeAu/fetchharbor"' in response.text
+    assert client.get("/static/favicon.svg").status_code == 200
+
+
+def test_admin_hostname_root_redirects_to_dashboard() -> None:
+    previous_host = settings.admin_host
+    settings.admin_host = "testserver"
+    try:
+        response = client.get(
+            "/", headers={"Host": settings.admin_host}, follow_redirects=False
+        )
+        assert response.status_code == 307
+        assert response.headers["location"] == "/admin"
+    finally:
+        settings.admin_host = previous_host
+
+
 def test_html_to_markdown_get_contract() -> None:
     response = client.get("/html-to-md", params={"html": "<h1>Hello</h1>"})
     assert response.status_code == 200
@@ -105,10 +132,15 @@ def test_admin_is_disabled_by_default() -> None:
 
 
 def test_admin_requires_token_when_enabled() -> None:
-    previous_enabled, previous_token = settings.admin_enabled, settings.admin_token
-    settings.admin_enabled, settings.admin_token = (
+    previous_enabled, previous_token, previous_host = (
+        settings.admin_enabled,
+        settings.admin_token,
+        settings.admin_host,
+    )
+    settings.admin_enabled, settings.admin_token, settings.admin_host = (
         True,
         "a-secure-test-token-that-is-long-enough",
+        "testserver",
     )
     try:
         assert client.get("/admin/api/overview").status_code == 401
@@ -117,6 +149,8 @@ def test_admin_requires_token_when_enabled() -> None:
         )
         assert response.status_code == 200
         assert "metrics" in response.json()
+        assert response.json()["payment"]["network"] == settings.x402_network
+        assert response.json()["payment"]["asset"] == settings.x402_asset
         response = client.put(
             "/admin/api/configuration",
             headers={"X-Admin-Token": settings.admin_token},
@@ -124,13 +158,41 @@ def test_admin_requires_token_when_enabled() -> None:
         )
         assert response.status_code == 409
     finally:
-        settings.admin_enabled, settings.admin_token = previous_enabled, previous_token
+        settings.admin_enabled, settings.admin_token, settings.admin_host = (
+            previous_enabled,
+            previous_token,
+            previous_host,
+        )
 
 
 def test_security_headers_are_applied() -> None:
     response = client.get("/health")
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_public_openapi_does_not_advertise_admin_capabilities() -> None:
+    schema = client.get("/openapi.json").json()
+    assert not any(path.startswith("/admin") for path in schema["paths"])
+    assert "AdminConfiguration" not in schema.get("components", {}).get("schemas", {})
+
+
+def test_public_openapi_uses_stable_service_names() -> None:
+    schema = client.get("/openapi.json").json()
+    expected = {
+        ("/scrape", "get"): ("scrape (GET)", "scrape_get"),
+        ("/scrape", "post"): ("scrape (POST)", "scrape_post"),
+        ("/html-to-md", "get"): ("html-to-md (GET)", "html_to_md_get"),
+        ("/html-to-md", "post"): ("html-to-md (POST)", "html_to_md_post"),
+        ("/pdf-parse", "get"): ("pdf-parse (GET)", "pdf_parse_get"),
+        ("/pdf-parse", "post"): ("pdf-parse (POST)", "pdf_parse_post"),
+    }
+    if "/chat" in schema["paths"]:
+        expected[("/chat", "post")] = ("chat", "chat")
+    for (path, method), (summary, operation_id) in expected.items():
+        operation = schema["paths"][path][method]
+        assert operation["summary"] == summary
+        assert operation["operationId"] == operation_id
 
 
 def test_price_update_is_deferred_until_restart(tmp_path) -> None:
@@ -154,15 +216,67 @@ def test_price_update_is_deferred_until_restart(tmp_path) -> None:
     assert restarted.price_scrape_usdc == "0.25"
 
 
+def test_payout_address_update_is_validated_audited_and_restart_required(
+    tmp_path,
+) -> None:
+    config_path = tmp_path / "admin-config.json"
+    configured = Settings(
+        admin_config_path=config_path,
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+    )
+    store = ConfigurationStore(configured)
+    wallet = "0x1111111111111111111111111111111111111111"
+    result = store.update(AdminConfiguration(x402_pay_to=wallet), "test")
+
+    assert configured.x402_pay_to != wallet
+    assert result["configuration"]["x402_pay_to"] == wallet
+    assert result["configuration"]["active_x402_pay_to"] != wallet
+    assert result["restart_required"] == ["x402_pay_to"]
+    assert store.audit_events()[0]["fields"] == ["x402_pay_to"]
+
+    restarted = Settings(
+        admin_config_path=config_path,
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+    )
+    ConfigurationStore(restarted)
+    assert restarted.x402_pay_to == wallet
+
+
+def test_payout_address_rejects_zero_and_malformed_addresses() -> None:
+    for address in ("not-a-wallet", "0x" + ("0" * 40)):
+        try:
+            AdminConfiguration(x402_pay_to=address)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted invalid payout address: {address}")
+
+
+def test_invalid_persisted_payout_address_blocks_startup(tmp_path) -> None:
+    config_path = tmp_path / "admin-config.json"
+    config_path.write_text('{"x402_pay_to":"not-a-wallet"}', encoding="utf-8")
+    configured = Settings(
+        admin_config_path=config_path,
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+    )
+    try:
+        ConfigurationStore(configured)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid persisted payout address was accepted")
+
+
 def test_admin_dashboard_escapes_dynamic_values() -> None:
-    previous_enabled = settings.admin_enabled
-    settings.admin_enabled = True
+    previous_enabled, previous_host = settings.admin_enabled, settings.admin_host
+    settings.admin_enabled, settings.admin_host = True, "testserver"
     try:
         response = client.get("/admin")
         assert "const esc=" in response.text
         assert "${esc(c.public_url)}" in response.text
+        assert 'href="https://github.com/BenColeAu/fetchharbor"' in response.text
     finally:
-        settings.admin_enabled = previous_enabled
+        settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
 
 
 def test_admin_host_is_enforced_by_the_application() -> None:

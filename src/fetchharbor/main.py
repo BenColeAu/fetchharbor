@@ -1,8 +1,10 @@
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from .admin.metrics import metrics, monitoring_middleware
 from .admin.router import build_admin_router
@@ -10,6 +12,7 @@ from .admin.store import ConfigurationStore
 from .config import get_settings
 from .discovery import x402_manifest
 from .payments import install_x402
+from .public import render_landing
 from .registry import ServiceRegistry
 from .services import configured_services
 
@@ -24,6 +27,9 @@ app = FastAPI(
     description="Modular x402 content services for self-hosted deployments",
 )
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts())
+app.mount(
+    "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
+)
 configuration_store = ConfigurationStore(settings)
 app.middleware("http")(monitoring_middleware)
 
@@ -45,6 +51,13 @@ for service in registry.services:
     app.include_router(service.router, tags=[service.name])
 install_x402(app, registry, settings)
 app.include_router(build_admin_router(settings, registry, metrics, configuration_store))
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def landing(request: Request) -> Response:
+    if settings.admin_host and request.url.hostname == settings.admin_host:
+        return RedirectResponse(url="/admin", status_code=307)
+    return HTMLResponse(render_landing(registry, settings))
 
 
 @app.get("/health", include_in_schema=False)
@@ -78,7 +91,7 @@ async def readiness() -> dict:
     return {"status": "ready", "services": len(registry.services)}
 
 
-@app.get("/services")
+@app.get("/services", summary="service catalog", operation_id="list_services")
 async def services() -> list[dict]:
     catalog = registry.catalog()
     for item in catalog:
@@ -86,6 +99,10 @@ async def services() -> list[dict]:
     return catalog
 
 
-@app.get("/.well-known/x402.json")
+@app.get(
+    "/.well-known/x402.json",
+    summary="x402 discovery",
+    operation_id="x402_discovery",
+)
 async def discovery() -> dict:
     return x402_manifest(registry, settings)

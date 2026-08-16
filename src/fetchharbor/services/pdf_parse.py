@@ -36,12 +36,12 @@ async def download(url: str) -> bytes:
     return data
 
 
-@router.get("/pdf-parse")
+@router.get("/pdf-parse", summary="pdf-parse (GET)", operation_id="pdf_parse_get")
 async def pdf_get(url: str = Query()) -> dict:
     return parse_pdf(await download(url))
 
 
-@router.post("/pdf-parse")
+@router.post("/pdf-parse", summary="pdf-parse (POST)", operation_id="pdf_parse_post")
 async def pdf_post(
     url: Annotated[str | None, Query()] = None,
     file: Annotated[UploadFile | None, File()] = None,

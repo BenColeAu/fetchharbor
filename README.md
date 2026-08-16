@@ -1,3 +1,5 @@
+<p align="center"><img src="src/fetchharbor/static/logo.svg" alt="FetchHarbor" width="286"></p>
+
 # FetchHarbor
 
 [![Docker CI](https://github.com/BenColeAu/fetchharbor/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/BenColeAu/fetchharbor/actions/workflows/docker-ci.yml)
