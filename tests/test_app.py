@@ -90,6 +90,8 @@ def test_public_landing_page_explains_the_service() -> None:
     assert "/docs" in response.text
     assert "/scrape" in response.text
     assert "/static/logo.svg" in response.text
+    assert "<h3>html-to-md</h3>" in response.text
+    assert "<h3>pdf-parse</h3>" in response.text
     assert 'href="https://github.com/BenColeAu/fetchharbor"' in response.text
     assert client.get("/static/favicon.svg").status_code == 200
 

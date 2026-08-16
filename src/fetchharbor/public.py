@@ -12,7 +12,7 @@ def render_landing(registry: ServiceRegistry, settings: Settings) -> str:
         cards.append(
             f"""<article class="card service">
             <div class="service-top"><span class="method">{escape(methods)}</span><span class="price">{escape(price)} USDC</span></div>
-            <h3>{escape(service.name.replace("-", " ").title())}</h3>
+            <h3>{escape(service.name)}</h3>
             <p>{escape(service.description)}</p>
             <code>{escape(service.path)}</code>
             </article>"""
