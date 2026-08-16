@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .admin.metrics import metrics, monitoring_middleware
@@ -32,11 +32,23 @@ app.mount(
 )
 configuration_store = ConfigurationStore(settings)
 app.middleware("http")(monitoring_middleware)
+service_methods = {
+    service.path: tuple(method.upper() for method in service.methods)
+    for service in registry.services
+}
 
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    allowed_methods = service_methods.get(request.url.path)
+    if allowed_methods and request.method not in allowed_methods:
+        response = JSONResponse(
+            {"detail": "Method not allowed"},
+            status_code=405,
+            headers={"Allow": ", ".join(allowed_methods)},
+        )
+    else:
+        response = await call_next(request)
     if settings.security_headers_enabled:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
