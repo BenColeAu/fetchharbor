@@ -1,7 +1,9 @@
+import json
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from html import escape
 from ipaddress import ip_address, ip_network
+from pathlib import Path
 from threading import Lock
 from time import monotonic, time
 
@@ -24,6 +26,35 @@ class MetricsStore:
         self._routes: dict[str, RouteMetric] = defaultdict(RouteMetric)
         self._recent: deque[dict] = deque(maxlen=100)
         self._lock = Lock()
+        self._event_path: Path | None = None
+        self._write_events = False
+
+    def configure_shared_events(self, path: Path, *, writer: bool) -> None:
+        self._event_path = Path(path)
+        self._write_events = writer
+
+    def _persist_recent(self) -> None:
+        if not self._event_path or not self._write_events:
+            return
+        self._event_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self._event_path.with_suffix(".tmp")
+        temporary.write_text(
+            "".join(
+                json.dumps(event, separators=(",", ":")) + "\n"
+                for event in self._recent
+            ),
+            encoding="utf-8",
+        )
+        temporary.replace(self._event_path)
+
+    def _shared_recent(self) -> list[dict] | None:
+        if not self._event_path or self._write_events or not self._event_path.exists():
+            return None
+        try:
+            lines = self._event_path.read_text(encoding="utf-8").splitlines()[-100:]
+            return [json.loads(line) for line in lines]
+        except (OSError, json.JSONDecodeError):
+            return None
 
     def record(
         self,
@@ -57,6 +88,7 @@ class MetricsStore:
                     "user_agent": user_agent,
                 }
             )
+            self._persist_recent()
 
     def snapshot(self, retention_seconds: int | None = None) -> dict:
         process = psutil.Process()
@@ -75,7 +107,8 @@ class MetricsStore:
                 }
                 for key, value in sorted(self._routes.items())
             ]
-            recent = list(reversed(self._recent))
+            shared = self._shared_recent()
+            recent = list(reversed(shared if shared is not None else self._recent))
             if retention_seconds is not None:
                 cutoff = time() - retention_seconds
                 recent = [event for event in recent if event["at"] >= cutoff]

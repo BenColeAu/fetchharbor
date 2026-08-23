@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 from fastapi import Request
@@ -7,11 +7,13 @@ from fastapi.testclient import TestClient
 
 from fetchharbor.admin.metrics import MetricsStore, request_source
 from fetchharbor.admin.store import AdminConfiguration, ConfigurationStore
+from fetchharbor.admin_app import app as private_admin_app
 from fetchharbor.config import Settings
 from fetchharbor.main import app, settings
 from fetchharbor.services.scrape import _validate_public_url
 
 client = TestClient(app)
+admin_client = TestClient(private_admin_app)
 
 
 def test_egress_proxy_health_check_requires_a_real_manager_response() -> None:
@@ -108,17 +110,15 @@ def test_public_landing_page_explains_the_service() -> None:
     assert client.get("/static/favicon.svg").status_code == 200
 
 
-def test_admin_hostname_root_redirects_to_dashboard() -> None:
-    previous_host = settings.admin_host
-    settings.admin_host = "testserver"
-    try:
-        response = client.get(
-            "/", headers={"Host": settings.admin_host}, follow_redirects=False
-        )
-        assert response.status_code == 307
-        assert response.headers["location"] == "/admin"
-    finally:
-        settings.admin_host = previous_host
+def test_private_admin_root_redirects_to_dashboard() -> None:
+    response = admin_client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/admin"
+
+
+def test_public_process_has_no_admin_routes() -> None:
+    assert client.get("/admin").status_code == 404
+    assert client.get("/admin/api/overview").status_code == 404
 
 
 def test_html_to_markdown_get_contract() -> None:
@@ -189,6 +189,27 @@ def test_pdf_upload_limit_is_enforced_before_parsing() -> None:
         settings.max_download_bytes = previous_limit
 
 
+def test_pdf_post_accepts_a_multipart_url() -> None:
+    with (
+        patch(
+            "fetchharbor.services.pdf_parse.download",
+            new=AsyncMock(return_value=b"pdf bytes"),
+        ) as download,
+        patch(
+            "fetchharbor.services.pdf_parse.parse_pdf",
+            return_value={"status": "success", "text": "example"},
+        ),
+    ):
+        response = client.post(
+            "/pdf-parse",
+            files={"url": (None, "https://example.com/document.pdf")},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    download.assert_awaited_once_with("https://example.com/document.pdf")
+
+
 def test_discovery_contains_six_route_entries() -> None:
     response = client.get("/.well-known/x402.json")
     assert response.status_code == 200
@@ -198,6 +219,32 @@ def test_discovery_contains_six_route_entries() -> None:
         extension = resource["extensions"]["bazaar"]
         assert extension["info"]["input"]["method"] in {"GET", "POST"}
         assert extension["schema"]["$schema"].endswith("2020-12/schema")
+        output_schema = extension["schema"]["properties"]["output"]["properties"][
+            "example"
+        ]
+        assert output_schema["type"] == "object"
+        assert output_schema["required"]
+
+
+def test_pdf_discovery_is_method_specific() -> None:
+    resources = client.get("/.well-known/x402.json").json()["resources"]
+    pdf_resources = [
+        item for item in resources if item["resource"].endswith("/pdf-parse")
+    ]
+    by_method = {
+        item["extensions"]["bazaar"]["info"]["input"]["method"]: item
+        for item in pdf_resources
+    }
+
+    get_schema = by_method["GET"]["extensions"]["bazaar"]["schema"]["properties"][
+        "input"
+    ]["properties"]["queryParams"]
+    post_schema = by_method["POST"]["extensions"]["bazaar"]["schema"]["properties"][
+        "input"
+    ]["properties"]["body"]
+    assert get_schema["required"] == ["url"]
+    assert post_schema["anyOf"] == [{"required": ["url"]}, {"required": ["file"]}]
+    assert post_schema["properties"]["file"]["format"] == "binary"
 
 
 def test_repository_defaults_do_not_contain_original_operator_wallet() -> None:
@@ -223,15 +270,15 @@ def test_admin_requires_token_when_enabled() -> None:
         "testserver",
     )
     try:
-        assert client.get("/admin/api/overview").status_code == 401
-        response = client.get(
+        assert admin_client.get("/admin/api/overview").status_code == 401
+        response = admin_client.get(
             "/admin/api/overview", headers={"X-Admin-Token": settings.admin_token}
         )
         assert response.status_code == 200
         assert "metrics" in response.json()
         assert response.json()["payment"]["network"] == settings.x402_network
         assert response.json()["payment"]["asset"] == settings.x402_asset
-        response = client.put(
+        response = admin_client.put(
             "/admin/api/configuration",
             headers={"X-Admin-Token": settings.admin_token},
             json={"payment_mode": "x402"},
@@ -257,7 +304,7 @@ def test_admin_session_survives_refresh_and_protects_mutations() -> None:
     settings.admin_host = "testserver"
     settings.env = "test"
     try:
-        with TestClient(app) as session_client:
+        with TestClient(private_admin_app) as session_client:
             login = session_client.post(
                 "/admin/api/session",
                 headers={"X-Admin-Token": settings.admin_token},
@@ -304,7 +351,7 @@ def test_admin_rejects_tampered_session_cookie() -> None:
     settings.admin_token = "a-secure-test-token-that-is-long-enough"
     settings.admin_host = "testserver"
     try:
-        with TestClient(app) as session_client:
+        with TestClient(private_admin_app) as session_client:
             session_client.cookies.set(
                 "fetchharbor_admin_session", "1.fake.invalid", path="/admin"
             )
@@ -350,6 +397,20 @@ def test_public_openapi_uses_stable_service_names() -> None:
         operation = schema["paths"][path][method]
         assert operation["summary"] == summary
         assert operation["operationId"] == operation_id
+
+
+def test_public_openapi_documents_service_failures() -> None:
+    schema = client.get("/openapi.json").json()
+    expected = {
+        ("/scrape", "get"): {"400", "402", "413", "502", "504", "508"},
+        ("/html-to-md", "post"): {"402", "413", "422"},
+        ("/pdf-parse", "post"): {"400", "402", "413", "422", "502", "504"},
+    }
+    if "/chat" in schema["paths"]:
+        expected[("/chat", "post")] = {"402", "413", "422", "502", "503", "504"}
+
+    for (path, method), statuses in expected.items():
+        assert statuses <= set(schema["paths"][path][method]["responses"])
 
 
 def test_price_update_is_deferred_until_restart(tmp_path) -> None:
@@ -501,7 +562,7 @@ def test_admin_dashboard_escapes_dynamic_values() -> None:
     previous_enabled, previous_host = settings.admin_enabled, settings.admin_host
     settings.admin_enabled, settings.admin_host = True, "testserver"
     try:
-        response = client.get("/admin")
+        response = admin_client.get("/admin")
         assert "const esc=" in response.text
         assert "${esc(c.public_url)}" in response.text
         assert 'href="https://github.com/BenColeAu/fetchharbor"' in response.text
@@ -534,6 +595,22 @@ def test_recent_request_monitoring_is_bounded_and_payload_free() -> None:
         "user_agent",
     }
     assert all("query" not in event and "body" not in event for event in recent)
+
+
+def test_private_admin_can_read_sanitized_public_request_history(tmp_path) -> None:
+    event_path = tmp_path / "request-events.jsonl"
+    public_metrics = MetricsStore()
+    public_metrics.configure_shared_events(event_path, writer=True)
+    public_metrics.record(
+        "GET", "/services", 200, 2.5, source_ip="203.0.113.0/24", country="AU"
+    )
+
+    private_metrics = MetricsStore()
+    private_metrics.configure_shared_events(event_path, writer=False)
+    event = private_metrics.snapshot()["recent"][0]
+    assert event["route"] == "GET /services"
+    assert event["source_ip"] == "203.0.113.0/24"
+    assert "body" not in event and "query" not in event
 
 
 def test_cloudflare_request_source_is_validated_and_masked() -> None:
@@ -614,7 +691,7 @@ def test_invalid_facilitator_secret_is_not_reflected(tmp_path) -> None:
     settings.admin_host = "testserver"
     marker = "DO-NOT-REFLECT-THIS-SECRET"
     try:
-        response = client.put(
+        response = admin_client.put(
             "/admin/api/facilitator-credentials",
             headers={"X-Admin-Token": settings.admin_token},
             json={"api_key_id": "key-id", "api_key_secret": marker * 1000},
@@ -634,13 +711,20 @@ def test_admin_host_is_enforced_by_the_application() -> None:
     previous_enabled, previous_host = settings.admin_enabled, settings.admin_host
     settings.admin_enabled, settings.admin_host = True, "testserver"
     try:
-        assert client.get("/admin", headers={"Host": "localhost"}).status_code == 404
-        assert client.get("/admin/", headers={"Host": "localhost"}).status_code == 404
         assert (
-            client.get("/admin", headers={"Host": settings.admin_host}).status_code
+            admin_client.get("/admin", headers={"Host": "localhost"}).status_code == 404
+        )
+        assert (
+            admin_client.get("/admin/", headers={"Host": "localhost"}).status_code
+            == 404
+        )
+        assert (
+            admin_client.get(
+                "/admin", headers={"Host": settings.admin_host}
+            ).status_code
             == 200
         )
-        trailing_slash = client.get(
+        trailing_slash = admin_client.get(
             "/admin/", headers={"Host": settings.admin_host}, follow_redirects=False
         )
         assert trailing_slash.status_code == 307

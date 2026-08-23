@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     admin_session_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     admin_config_path: Path = Path("data/admin-config.json")
     audit_log_path: Path = Path("data/admin-audit.jsonl")
+    request_event_path: Path = Path("data/request-events.jsonl")
     security_headers_enabled: bool = True
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     outbound_proxy_url: str = ""

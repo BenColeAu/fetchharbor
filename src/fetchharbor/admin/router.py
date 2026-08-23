@@ -67,13 +67,13 @@ def build_admin_router(
         ).hexdigest()
         return secrets.compare_digest(supplied, expected)
 
-    def set_session_cookie(response: Response) -> None:
+    def set_session_cookie(request: Request, response: Response) -> None:
         response.set_cookie(
             cookie_name,
             session_cookie(),
             max_age=settings.admin_session_ttl_seconds,
             httponly=True,
-            secure=settings.env == "production",
+            secure=request.url.scheme == "https",
             samesite="strict",
             path="/admin",
         )
@@ -98,15 +98,13 @@ def build_admin_router(
         failed_attempts[actor].clear()
         request.state.admin_cookie_authenticated = cookie_valid and not header_valid
         if cookie_valid:
-            set_session_cookie(response)
+            set_session_cookie(request, response)
         return actor
 
     def require_same_origin(request: Request) -> None:
         origin = request.headers.get("origin", "")
         parsed = urlparse(origin)
-        expected_scheme = (
-            "https" if settings.env == "production" else request.url.scheme
-        )
+        expected_scheme = request.url.scheme
         if parsed.scheme != expected_scheme or parsed.hostname != settings.admin_host:
             raise HTTPException(403, "Admin mutation origin is not allowed")
 
@@ -147,7 +145,7 @@ def build_admin_router(
             record_failed_attempt(actor)
             raise HTTPException(401, "Invalid admin token")
         failed_attempts[actor].clear()
-        set_session_cookie(response)
+        set_session_cookie(request, response)
         return {
             "status": "authenticated",
             "expires_in": settings.admin_session_ttl_seconds,

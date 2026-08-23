@@ -3,15 +3,60 @@ services:
     ports: !reset []
     networks: !override [internal]
     environment:
-      FETCHHARBOR_ADMIN_TOKEN_FILE: /run/secrets/admin_token
+      FETCHHARBOR_ADMIN_ENABLED: "false"
       FETCHHARBOR_OUTBOUND_PROXY_URL: http://egress-proxy:3128
       FETCHHARBOR_REQUIRE_OUTBOUND_PROXY: "true"
       HTTP_PROXY: http://egress-proxy:3128
       HTTPS_PROXY: http://egress-proxy:3128
       NO_PROXY: localhost,127.0.0.1,api,egress-proxy,ollama
-    secrets: [admin_token]
     depends_on:
       egress-proxy:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: .
+      target: runtime
+    command: ["uvicorn", "fetchharbor.admin_app:app", "--host", "0.0.0.0", "--port", "8080"]
+    env_file: [.env]
+    environment:
+      FETCHHARBOR_ADMIN_ENABLED: "true"
+      FETCHHARBOR_ADMIN_HOST: 127.0.0.1
+      FETCHHARBOR_ADMIN_TOKEN_FILE: /run/secrets/admin_token
+      FETCHHARBOR_ALLOWED_HOSTS: 127.0.0.1,localhost
+      FETCHHARBOR_REQUIRE_OUTBOUND_PROXY: "false"
+    volumes: ["fetchharbor-data:/app/data"]
+    secrets: [admin_token]
+    restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.5
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8080/admin', headers={'Host':'127.0.0.1'}), timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks: [admin-internal]
+
+  admin-loopback:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    ports: ["127.0.0.1:${FETCHHARBOR_ADMIN_PORT:-8081}:8080"]
+    volumes: ["./deploy/AdminCaddyfile:/etc/caddy/Caddyfile:ro"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/config:size=16m", "/data:size=16m"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    networks: [admin-edge, admin-internal]
+    depends_on:
+      admin:
         condition: service_healthy
 
   ingress:
@@ -19,7 +64,6 @@ services:
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       FETCHHARBOR_PUBLIC_HOST: ${FETCHHARBOR_PUBLIC_HOST:?set public hostname}
-      FETCHHARBOR_ADMIN_HOST: ${FETCHHARBOR_ADMIN_HOST:?set private admin hostname}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -47,10 +91,15 @@ services:
       retries: 5
     networks: [edge, internal]
 
+volumes:
+  caddy-data: {}
+  caddy-config: {}
+
 secrets:
   admin_token:
     file: ${FETCHHARBOR_ADMIN_TOKEN_SECRET_FILE:-./secrets/admin_token.txt}
 
-volumes:
-  caddy-data: {}
-  caddy-config: {}
+networks:
+  admin-edge: {}
+  admin-internal:
+    internal: true

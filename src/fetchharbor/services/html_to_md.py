@@ -21,12 +21,29 @@ def convert(html: str) -> dict:
     }
 
 
-@router.get("/html-to-md", summary="html-to-md (GET)", operation_id="html_to_md_get")
+HTML_ERRORS = {
+    402: {"description": "A valid x402 payment is required."},
+    413: {"description": "The HTML input exceeds the configured request limit."},
+    422: {"description": "The request does not contain valid HTML input."},
+}
+
+
+@router.get(
+    "/html-to-md",
+    summary="html-to-md (GET)",
+    operation_id="html_to_md_get",
+    responses=HTML_ERRORS,
+)
 async def html_to_md_get(html: str = Query(max_length=2_000_000)) -> dict:
     return convert(html)
 
 
-@router.post("/html-to-md", summary="html-to-md (POST)", operation_id="html_to_md_post")
+@router.post(
+    "/html-to-md",
+    summary="html-to-md (POST)",
+    operation_id="html_to_md_post",
+    responses=HTML_ERRORS,
+)
 async def html_to_md_post(request: HtmlRequest) -> dict:
     return convert(request.html)
 
@@ -35,7 +52,11 @@ definition = ServiceDefinition(
     name="html-to-md",
     path="/html-to-md",
     price_usdc="0.005",
-    description="Convert HTML into cleaned Markdown.",
+    description=(
+        "Convert a supplied HTML string into deterministic, LLM-ready Markdown. "
+        "Preserves headings, links, lists, emphasis, and code without fetching a URL "
+        "or invoking an AI model. Input is bounded to 2,000,000 characters."
+    ),
     router=router,
     input_schema={
         "type": "object",
@@ -49,5 +70,16 @@ definition = ServiceDefinition(
         "markdown": "# Hello",
         "character_count": 7,
         "truncated": False,
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string", "const": "success"},
+            "markdown": {"type": "string"},
+            "character_count": {"type": "integer", "minimum": 0},
+            "truncated": {"type": "boolean"},
+        },
+        "required": ["status", "markdown", "character_count", "truncated"],
+        "additionalProperties": False,
     },
 )

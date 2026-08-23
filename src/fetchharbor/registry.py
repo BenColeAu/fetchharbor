@@ -17,8 +17,17 @@ class ServiceDefinition:
     methods: tuple[str, ...] = ("GET", "POST")
     input_schema: dict[str, Any] = field(default_factory=dict)
     input_example: dict[str, Any] = field(default_factory=dict)
+    method_input_schemas: dict[str, dict[str, Any]] = field(default_factory=dict)
+    method_input_examples: dict[str, dict[str, Any]] = field(default_factory=dict)
     body_types: dict[str, str] = field(default_factory=dict)
     output_example: dict[str, Any] = field(default_factory=dict)
+    output_schema: dict[str, Any] = field(default_factory=dict)
+
+    def input_schema_for(self, method: str) -> dict[str, Any]:
+        return self.method_input_schemas.get(method.upper(), self.input_schema)
+
+    def input_example_for(self, method: str) -> dict[str, Any]:
+        return self.method_input_examples.get(method.upper(), self.input_example)
 
 
 class ServiceRegistry:

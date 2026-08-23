@@ -8,13 +8,14 @@ FetchHarbor has a lean hardened deployment path, but mainnet payment readiness s
 2. Use a production facilitator for mainnet. The default `https://x402.org/facilitator` is testnet-only; the optional mainnet overlay supports deployment-specific CDP credentials through Docker secrets.
 3. Use `compose.production.yaml` or an equivalent trusted TLS proxy. Do not expose Uvicorn directly to the internet.
 4. Set `FETCHHARBOR_ALLOWED_HOSTS` to the real public hostname and restrict trusted forwarded-header sources at the process or network boundary.
-5. Enable admin only on a private network, VPN, or separately protected hostname. Mount the admin credential as a Docker secret and set `FETCHHARBOR_ADMIN_TOKEN_FILE` to its path. Use at least 32 random characters.
+5. Keep the separate admin process bound to `127.0.0.1`. Never add it to public Caddy, Cloudflare Tunnel, or another ingress. Mount its credential as a Docker secret and use at least 32 random characters.
 6. Keep production container images pinned to reviewed immutable digests. Refresh the tag and digest together through a reviewed dependency-update process.
 7. Run vulnerability and dependency scans in CI, back up the data volume, test restoration, and connect optional external alerting if needed.
+8. Treat `requirements.lock` and `requirements-test.lock` as release artifacts. Regenerate and review them whenever `pyproject.toml` changes; Docker installs only hash-verified resolved dependencies from these files.
 
 ## Scaling limitations
 
-Monitoring counters and authentication throttles are in process memory. Runtime configuration is persisted to one JSON file. These mechanisms are deliberately scoped to one API container. Before horizontal scaling, move throttling to a shared service or edge proxy and configuration/audit data to a transactional shared database. External metrics systems are optional and are not part of the clean default stack.
+Monitoring counters and authentication throttles are in process memory. The latest 100 sanitized public request events and runtime configuration are shared with the loopback-only admin process through bounded files in the private data volume. These mechanisms are deliberately scoped to one host. Before horizontal scaling, move throttling to a shared service or edge proxy and configuration/audit data to a transactional shared database.
 
 ## Optional Ollama chat service
 
@@ -72,13 +73,13 @@ Stop or quiesce the API before taking a filesystem-level backup of the `fetchhar
 Never commit `.env`. Prefer Compose secrets or an external secret manager. The application never returns the admin token, wallet credentials, facilitator credentials, or environment contents through admin APIs.
 
 The admin token is exchanged for a signed, HttpOnly, SameSite=Strict browser
-session. In production the cookie is Secure, limited to `/admin`, and expires
+session. The cookie is limited to `/admin` and expires
 after 15 minutes by default; change the bounded lifetime with
 `FETCHHARBOR_ADMIN_SESSION_TTL_SECONDS`. The token is cleared from the sign-in
 field and is not stored in browser storage. Cookie-authenticated changes also
-require the exact HTTPS admin origin, while automation may continue to send the
-admin token header directly. Use Logout on shared devices and keep Cloudflare
-Access or an equivalent identity layer in front of the admin hostname.
+require the exact loopback origin, while local automation may continue to send
+the admin token header directly. Use Logout on shared devices and never route
+the admin listener through public ingress.
 
 ## Release gate
 
@@ -109,8 +110,8 @@ higher-assurance deployment. A mounted external credential takes precedence and
 the panel intentionally makes it read-only. FetchHarbor never requests or stores
 the payout wallet's private key.
 
-Submit admin-managed credentials only through the protected HTTPS admin
-hostname. Admin pages and API responses are marked `no-store`; credential
+Submit admin-managed credentials only through the loopback admin panel. Admin
+pages and responses are marked `no-store`; credential
 validation errors never reflect submitted values; request bodies are size
 limited; and the browser clears password fields after submission. FetchHarbor
 does not log request bodies. Treat browser extensions, endpoint malware, host
@@ -119,18 +120,11 @@ application controls cannot protect a secret from a compromised browser or host.
 
 ### 1. Domain and TLS
 
-The administrator owns DNS, certificates and renewal monitoring. For direct ingress, set `FETCHHARBOR_PUBLIC_HOST`, `FETCHHARBOR_ADMIN_HOST`, `FETCHHARBOR_PUBLIC_URL` and `FETCHHARBOR_ALLOWED_HOSTS`, then start `compose.production.yaml`. Caddy obtains and renews certificates automatically; preserve both Caddy volumes and alert on certificate or renewal errors.
+The administrator owns DNS, certificates and renewal monitoring. For direct ingress, set `FETCHHARBOR_PUBLIC_HOST`, `FETCHHARBOR_PUBLIC_URL` and `FETCHHARBOR_ALLOWED_HOSTS`, then start `compose.production.yaml`. Caddy obtains and renews certificates automatically; preserve both Caddy volumes and alert on certificate or renewal errors.
 
-For Cloudflare Tunnel, create a remotely managed tunnel in Cloudflare Zero Trust and add two public-hostname routes:
-
-- the public API hostname to `http://api:8080`
-- the admin hostname to `http://api:8080`, protected by a Cloudflare Access policy
-
-Keep both names at the same DNS depth unless the zone has a certificate that
-explicitly covers deeper names. For example, use `fetchharbor.example.com` and
-`fetchharbor-admin.example.com`; a standard `*.example.com` certificate does not
-cover `admin.fetchharbor.example.com`. Verify both TLS handshakes before removing
-the direct-ingress fallback.
+For Cloudflare Tunnel, create one remotely managed public-hostname route from the
+public API hostname to `http://api:8080`. Do not create an admin hostname or a
+tunnel route to the `admin` service.
 
 Put only the tunnel token in `secrets/cloudflare_tunnel_token.txt`, set the same host values in `.env`, and start:
 
@@ -138,9 +132,9 @@ Put only the tunnel token in `secrets/cloudflare_tunnel_token.txt`, set the same
 docker compose -f compose.yaml -f compose.production.yaml -f compose.cloudflare-tunnel.yaml up --build -d
 ```
 
-The Cloudflare overlay places the direct Caddy ingress behind the inactive `direct-ingress` profile, publishes no host ports, and runs `cloudflared` from an immutable image digest. FetchHarbor also rejects admin routes unless the request host exactly matches `FETCHHARBOR_ADMIN_HOST`. Do not disable that check. If Cloudflare Browser Integrity Check or another WAF rule blocks non-browser API clients, add a narrowly scoped API-path exception rather than disabling zone-wide protection.
+The Cloudflare overlay places the direct Caddy ingress behind the inactive `direct-ingress` profile, publishes no public host ports, and runs `cloudflared` from an immutable image digest. The separate admin process remains bound to host loopback. If Cloudflare Browser Integrity Check or another WAF rule blocks non-browser API clients, add a narrowly scoped API-path exception rather than disabling zone-wide protection.
 
-The Cloudflare overlay also selects `FETCHHARBOR_REQUEST_SOURCE_PROXY=cloudflare`, allowing the protected admin dashboard to attribute requests using Cloudflare's overwritten `CF-Connecting-IP`, `CF-IPCountry`, and `CF-Ray` headers. This is safe only while the origin remains private. The default privacy mode stores masked `/24` IPv4 and `/48` IPv6 networks in a bounded in-memory buffer; administrators can select full, masked, hidden, or disabled source collection and a 60-second to seven-day retention window. The buffer still holds at most 100 events and is cleared on restart. Country values are approximate. FetchHarbor never retains query strings, request bodies, authorization data, payment headers, or credentials in this monitoring buffer.
+The Cloudflare overlay also selects `FETCHHARBOR_REQUEST_SOURCE_PROXY=cloudflare`, allowing the protected admin dashboard to attribute requests using Cloudflare's overwritten `CF-Connecting-IP`, `CF-IPCountry`, and `CF-Ray` headers. This is safe only while the origin remains private. The default privacy mode stores masked `/24` IPv4 and `/48` IPv6 networks in a bounded, sanitized file in the private data volume; administrators can select full, masked, hidden, or disabled source collection and a 60-second to seven-day retention window. The file survives normal container restarts and retains at most 100 unexpired events. Country values are approximate. FetchHarbor never retains query strings, request bodies, authorization data, payment headers, or credentials in this monitoring history.
 
 #### Cloudflare edge hardening
 
@@ -155,8 +149,7 @@ Add rate limits for the resource-consuming public operations (`/scrape`,
 load test and expected client behaviour, use a blocking response for clearly
 abusive excess traffic, and review events before tightening them. Cloudflare's
 free plan provides one rate-limiting rule, so group those paths in that rule when
-necessary. Keep the admin hostname behind Cloudflare Access as well as the
-application token.
+necessary. The loopback-only admin listener is outside Cloudflare's public path.
 
 Do not enable plain Bot Fight Mode without testing every API client. FetchHarbor
 is intentionally called by software and agents, and that mode cannot be scoped

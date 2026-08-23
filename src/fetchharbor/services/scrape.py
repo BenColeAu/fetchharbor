@@ -90,12 +90,34 @@ async def fetch(url: str) -> dict:
     }
 
 
-@router.get("/scrape", summary="scrape (GET)", operation_id="scrape_get")
+SCRAPE_ERRORS = {
+    400: {
+        "description": "The URL is invalid, unresolvable, or targets a blocked network."
+    },
+    402: {"description": "A valid x402 payment is required."},
+    413: {"description": "The remote response exceeds the configured size limit."},
+    502: {"description": "The remote server failed or returned an error response."},
+    504: {"description": "The remote request timed out."},
+    508: {"description": "The remote server exceeded the redirect limit."},
+}
+
+
+@router.get(
+    "/scrape",
+    summary="scrape (GET)",
+    operation_id="scrape_get",
+    responses=SCRAPE_ERRORS,
+)
 async def scrape_get(url: str = Query()) -> dict:
     return await fetch(url)
 
 
-@router.post("/scrape", summary="scrape (POST)", operation_id="scrape_post")
+@router.post(
+    "/scrape",
+    summary="scrape (POST)",
+    operation_id="scrape_post",
+    responses=SCRAPE_ERRORS,
+)
 async def scrape_post(request: ScrapeRequest) -> dict:
     return await fetch(str(request.url))
 
@@ -104,7 +126,12 @@ definition = ServiceDefinition(
     name="scrape",
     path="/scrape",
     price_usdc="0.01",
-    description="Fetch a public URL and return its content.",
+    description=(
+        "Fetch one public HTTP(S) URL for research, extraction, or agent workflows. "
+        "Returns the final URL, upstream status, content type, and decoded content. "
+        "Private, local, metadata, and reserved destinations are blocked; redirects "
+        "are revalidated and response size and duration are bounded."
+    ),
     router=router,
     input_schema={
         "type": "object",
@@ -117,6 +144,19 @@ definition = ServiceDefinition(
         "status": "success",
         "url": "https://example.com",
         "status_code": 200,
+        "content_type": "text/html; charset=utf-8",
         "content": "...",
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string", "const": "success"},
+            "url": {"type": "string", "format": "uri"},
+            "status_code": {"type": "integer", "minimum": 100, "maximum": 599},
+            "content_type": {"type": ["string", "null"]},
+            "content": {"type": "string"},
+        },
+        "required": ["status", "url", "status_code", "content_type", "content"],
+        "additionalProperties": False,
     },
 )
