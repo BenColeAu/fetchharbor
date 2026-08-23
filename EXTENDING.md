@@ -25,6 +25,8 @@ Every service module under `src/fetchharbor/services/` exports `definition`, a
 | `input_example` | Safe, realistic input Bazaar can use to understand the route |
 | `body_types` | Optional per-method body type overrides such as `{"POST": "form-data"}`; body methods otherwise default to JSON |
 | `output_example` | Representative JSON response published in discovery |
+| `output_schema` | Optional JSON Schema for the successful response |
+| `mime_type` | Advertised response MIME type; defaults to `application/json` |
 
 The definition is the source of truth. Do not add a route without declaring it,
 because undeclared routes will not receive generated x402 protection or discovery
@@ -40,8 +42,9 @@ metadata. Likewise, do not declare methods that the router does not implement.
 4. Export one `ServiceDefinition` with matching method, path, input schema,
    realistic input example, and output example. Set `body_types` for non-JSON
    body methods.
-5. Import the definition in `src/fetchharbor/services/__init__.py` and append it to
-   `BUILTIN_SERVICES`.
+5. Import the definition in `src/fetchharbor/services/__init__.py` and add it to
+   the enabled service list. Optional routes must not be registered or advertised
+   while their dependency is disabled.
 6. Add typed settings to `Settings` for all operator-controlled values. Add inert
    examples to `.env.example`; use Docker secrets for credentials.
 7. If the dependency needs another container, add it through an optional Compose

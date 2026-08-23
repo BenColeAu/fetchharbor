@@ -15,6 +15,9 @@ It is operator-neutral: the repository contains no personal wallet, domain, API 
 - `GET|POST /html-to-md`
 - `GET|POST /pdf-parse`
 - `POST /chat` when `FETCHHARBOR_OLLAMA_ENABLED=true`
+- `POST /v1/audio/speech`, `/audio/transcribe`, `/audio/subtitles`, and
+  `/audio/convert` when `FETCHHARBOR_MEDIA_ENABLED=true`
+- `POST /audio/transcribe-summary` when both media and Ollama are enabled
 - `GET /services`
 - `GET /.well-known/x402.json`
 - `GET /health`, `/health/live`, `/health/ready`
@@ -67,6 +70,11 @@ configuration and security checklist, testing requirements, and a complete Ollam
 chat adapter example. The same pattern supports local functions, internal
 containers, hosted APIs, databases, queues, and other providers.
 
+The optional local media worker adds speech, transcription, subtitles, audio
+conversion and transcription+summary without exposing a model port or adding a
+database. See [MEDIA.md](MEDIA.md) for model setup, public contracts, security,
+privacy, pricing and production acceptance checks.
+
 ## Payments
 
 FetchHarbor includes the official x402 v2 FastAPI middleware and generates its protected routes from the same service registry used by discovery. Payment remains disabled by default. The example configuration targets Base Sepolia and the signup-free testnet facilitator. Set a real receiving wallet before enabling `FETCHHARBOR_PAYMENT_MODE=x402`.
@@ -92,6 +100,12 @@ Payment and operator settings are customisable without editing source code:
 | `FETCHHARBOR_PRICE_HTML_TO_MD_USDC` | HTML conversion price |
 | `FETCHHARBOR_PRICE_PDF_PARSE_USDC` | PDF parsing price |
 | `FETCHHARBOR_PRICE_CHAT_USDC` | Ollama chat price |
+| `FETCHHARBOR_PRICE_AUDIO_SPEECH_USDC` | Local speech-generation price |
+| `FETCHHARBOR_PRICE_AUDIO_TRANSCRIBE_USDC` | Local transcription price |
+| `FETCHHARBOR_PRICE_AUDIO_SUBTITLES_USDC` | Local subtitle-generation price |
+| `FETCHHARBOR_PRICE_AUDIO_CONVERT_USDC` | Local audio-conversion price |
+| `FETCHHARBOR_PRICE_AUDIO_TRANSCRIBE_SUMMARY_USDC` | Transcription and Ollama-summary price |
+| `FETCHHARBOR_MEDIA_ENABLED` | Register the optional local media capabilities |
 | `FETCHHARBOR_OLLAMA_ENABLED` | Register the optional `/chat` capability |
 | `FETCHHARBOR_OLLAMA_BASE_URL` | Private or operator-approved Ollama API URL |
 | `FETCHHARBOR_OLLAMA_MODEL` | Installed model used by `/chat` |

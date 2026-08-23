@@ -1,6 +1,7 @@
 import tempfile
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -38,6 +39,10 @@ service_methods = {
     service.path: tuple(method.upper() for method in service.methods)
     for service in registry.services
 }
+media_paths = {
+    service.path for service in registry.services if service.name.startswith("audio-")
+}
+max_media_request_bytes = 36_100_000
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -58,7 +63,29 @@ async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
 async def security_headers(request: Request, call_next):
     configuration_store.refresh_live()
     allowed_methods = service_methods.get(request.url.path)
-    if allowed_methods and request.method not in allowed_methods:
+    if request.url.path in media_paths and request.method == "POST":
+        content_length = request.headers.get("content-length")
+        try:
+            declared_length = int(content_length) if content_length else None
+        except ValueError:
+            declared_length = -1
+        if declared_length is None:
+            response = JSONResponse(
+                {"detail": "Content-Length is required for media requests"},
+                status_code=411,
+            )
+        elif declared_length < 0:
+            response = JSONResponse(
+                {"detail": "Invalid Content-Length"}, status_code=400
+            )
+        elif declared_length > max_media_request_bytes:
+            response = JSONResponse(
+                {"detail": "Media request exceeds the configured limit"},
+                status_code=413,
+            )
+        else:
+            response = await call_next(request)
+    elif allowed_methods and request.method not in allowed_methods:
         response = JSONResponse(
             {"detail": "Method not allowed"},
             status_code=405,
@@ -138,6 +165,15 @@ async def readiness() -> dict:
                 pass
         except OSError as exc:
             raise HTTPException(503, "Persistent storage is not writable") from exc
+    if settings.media_enabled:
+        try:
+            async with httpx.AsyncClient(timeout=3, trust_env=False) as client:
+                worker = await client.get(
+                    f"{settings.media_worker_url.rstrip('/')}/health"
+                )
+                worker.raise_for_status()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(503, "Media worker is not ready") from exc
     write_runtime_status(settings, len(registry.services))
     return {"status": "ready", "services": len(registry.services)}
 

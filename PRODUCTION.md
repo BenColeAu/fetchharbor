@@ -12,6 +12,8 @@ FetchHarbor has a lean hardened deployment path, but mainnet payment readiness s
 6. Keep production container images pinned to reviewed immutable digests. Refresh the tag and digest together through a reviewed dependency-update process.
 7. Run vulnerability and dependency scans in CI, back up the data volume, test restoration, and connect optional external alerting if needed.
 8. Treat `requirements.lock` and `requirements-test.lock` as release artifacts. Regenerate and review them whenever `pyproject.toml` changes; Docker installs only hash-verified resolved dependencies from these files.
+9. If media is enabled, treat `requirements-media.lock`, the pinned model revision
+   and verified model assets as release artifacts and complete [MEDIA.md](MEDIA.md).
 
 ## Scaling limitations
 
@@ -145,7 +147,7 @@ Security Events after enabling it and tune only a specific false positive; do no
 create broad bypasses for the whole API or hostname.
 
 Add rate limits for the resource-consuming public operations (`/scrape`,
-`/pdf-parse`, `/html-to-md`, and `/chat`). Start with thresholds based on a short
+`/pdf-parse`, `/html-to-md`, `/chat`, `/v1/audio/speech`, and `/audio/*`). Start with thresholds based on a short
 load test and expected client behaviour, use a blocking response for clearly
 abusive excess traffic, and review events before tightening them. Cloudflare's
 free plan provides one rate-limiting rule, so group those paths in that rule when

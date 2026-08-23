@@ -22,6 +22,7 @@ class ServiceDefinition:
     body_types: dict[str, str] = field(default_factory=dict)
     output_example: dict[str, Any] = field(default_factory=dict)
     output_schema: dict[str, Any] = field(default_factory=dict)
+    mime_type: str = "application/json"
 
     def input_schema_for(self, method: str) -> dict[str, Any]:
         return self.method_input_schemas.get(method.upper(), self.input_schema)
