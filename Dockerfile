@@ -9,9 +9,9 @@ RUN groupadd --system fetchharbor \
     && useradd --system --gid fetchharbor --home /app fetchharbor \
     && install -d -o fetchharbor -g fetchharbor /app/data
 COPY pyproject.toml README.md LICENSE requirements.lock ./
-COPY src ./src
 RUN python -m pip install --no-cache-dir --require-hashes -r requirements.lock \
     && pip uninstall --yes pip setuptools
+COPY src ./src
 USER fetchharbor
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD python -c "import os, urllib.request; host=os.environ.get('FETCHHARBOR_ALLOWED_HOSTS','localhost').split(',')[0].strip(); request=urllib.request.Request('http://127.0.0.1:8080/health/ready', headers={'Host':host}); urllib.request.urlopen(request, timeout=3)"

@@ -21,6 +21,21 @@ class AdminConfiguration(BaseModel):
     )
     price_pdf_parse_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
     price_chat_usdc: str | None = Field(default=None, pattern=r"^\d+(\.\d{1,6})?$")
+    price_audio_speech_usdc: str | None = Field(
+        default=None, pattern=r"^\d+(\.\d{1,6})?$"
+    )
+    price_audio_transcribe_usdc: str | None = Field(
+        default=None, pattern=r"^\d+(\.\d{1,6})?$"
+    )
+    price_audio_subtitles_usdc: str | None = Field(
+        default=None, pattern=r"^\d+(\.\d{1,6})?$"
+    )
+    price_audio_transcribe_summary_usdc: str | None = Field(
+        default=None, pattern=r"^\d+(\.\d{1,6})?$"
+    )
+    price_audio_convert_usdc: str | None = Field(
+        default=None, pattern=r"^\d+(\.\d{1,6})?$"
+    )
     max_download_bytes: int | None = Field(default=None, ge=1024, le=100 * 1024 * 1024)
     request_timeout_seconds: float | None = Field(default=None, ge=1, le=300)
     security_headers_enabled: bool | None = None
@@ -53,6 +68,11 @@ RESTART_REQUIRED_FIELDS = {
     "price_html_to_md_usdc",
     "price_pdf_parse_usdc",
     "price_chat_usdc",
+    "price_audio_speech_usdc",
+    "price_audio_transcribe_usdc",
+    "price_audio_subtitles_usdc",
+    "price_audio_transcribe_summary_usdc",
+    "price_audio_convert_usdc",
     "x402_pay_to",
     "x402_network",
     "x402_asset",

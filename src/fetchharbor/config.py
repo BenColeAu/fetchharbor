@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     price_html_to_md_usdc: str = "0.005"
     price_pdf_parse_usdc: str = "0.01"
     price_chat_usdc: str = "0.01"
+    price_audio_speech_usdc: str = "0.04"
+    price_audio_transcribe_usdc: str = "0.025"
+    price_audio_subtitles_usdc: str = "0.035"
+    price_audio_transcribe_summary_usdc: str = "0.05"
+    price_audio_convert_usdc: str = "0.015"
     max_download_bytes: int = 20 * 1024 * 1024
     request_timeout_seconds: float = 30
     ollama_enabled: bool = False
@@ -43,6 +48,16 @@ class Settings(BaseSettings):
     ollama_queue_timeout_seconds: float = Field(default=1, gt=0, le=60)
     ollama_timeout_seconds: float = Field(default=120, gt=0, le=3600)
     ollama_keep_alive: str = "5m"
+    media_enabled: bool = False
+    media_worker_url: str = "http://media-worker:8090"
+    media_worker_token_file: Path | None = None
+    media_max_upload_bytes: int = Field(
+        default=25 * 1024 * 1024, ge=1024, le=25 * 1024 * 1024
+    )
+    media_max_audio_seconds: int = Field(default=300, ge=1, le=900)
+    media_max_tts_characters: int = Field(default=2_000, ge=1, le=5_000)
+    media_timeout_seconds: float = Field(default=180, gt=0, le=600)
+    media_summary_max_characters: int = Field(default=20_000, ge=1, le=40_000)
     admin_enabled: bool = False
     admin_host: str = ""
     admin_token: str = ""
@@ -65,6 +80,7 @@ class Settings(BaseSettings):
         "admin_token_file",
         "x402_cdp_api_key_id_file",
         "x402_cdp_api_key_secret_file",
+        "media_worker_token_file",
         mode="before",
     )
     @classmethod
@@ -82,6 +98,21 @@ class Settings(BaseSettings):
                 raise ValueError("Ollama base URL must be an absolute HTTP(S) URL")
             if not self.ollama_model.strip():
                 raise ValueError("Ollama model must not be empty")
+        if self.media_enabled:
+            parsed_media_url = urlparse(self.media_worker_url)
+            if (
+                parsed_media_url.scheme not in {"http", "https"}
+                or not parsed_media_url.hostname
+            ):
+                raise ValueError("Media worker URL must be an absolute HTTP(S) URL")
+            try:
+                media_token = self.resolved_media_worker_token()
+            except OSError as exc:
+                raise ValueError("Media worker credential could not be read") from exc
+            if len(media_token) < 32:
+                raise ValueError(
+                    "Media worker credential must contain at least 32 characters"
+                )
         if self.payment_mode == "x402":
             if self.x402_pay_to == "0x0000000000000000000000000000000000000000":
                 raise ValueError("x402 requires a non-placeholder receiving wallet")
@@ -155,6 +186,11 @@ class Settings(BaseSettings):
         if managed.exists():
             return managed.read_text(encoding="utf-8").strip()
         return self.x402_cdp_api_key_secret.strip()
+
+    def resolved_media_worker_token(self) -> str:
+        if self.media_worker_token_file:
+            return self.media_worker_token_file.read_text(encoding="utf-8").strip()
+        return ""
 
     def trusted_hosts(self) -> list[str]:
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]

@@ -97,7 +97,7 @@ def install_x402(app, registry: ServiceRegistry, settings: Settings) -> None:
                     )
                 ],
                 resource=f"{settings.public_url.rstrip('/')}{service.path}",
-                mime_type="application/json",
+                mime_type=service.mime_type,
                 description=service.description,
                 extensions=bazaar_extensions(service, method),
             )

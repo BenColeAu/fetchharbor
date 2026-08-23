@@ -1,0 +1,67 @@
+services:
+  api:
+    environment:
+      FETCHHARBOR_MEDIA_ENABLED: "true"
+      FETCHHARBOR_MEDIA_WORKER_URL: http://media-worker:8090
+      FETCHHARBOR_MEDIA_WORKER_TOKEN_FILE: /run/secrets/media_worker_token
+    secrets: [media_worker_token]
+    networks: [media-internal]
+    depends_on:
+      media-worker:
+        condition: service_healthy
+
+  media-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.media
+    environment:
+      FETCHHARBOR_MEDIA_TOKEN_FILE: /run/secrets/media_worker_token
+      FETCHHARBOR_MEDIA_MODEL_DIR: /models
+      FETCHHARBOR_MEDIA_WHISPER_DEVICE: cpu
+      FETCHHARBOR_MEDIA_WHISPER_COMPUTE_TYPE: int8
+      PHONEMIZER_ESPEAK_LIBRARY: /usr/lib/x86_64-linux-gnu/libespeak-ng.so.1
+      FETCHHARBOR_MEDIA_MAX_UPLOAD_BYTES: ${FETCHHARBOR_MEDIA_MAX_UPLOAD_BYTES:-26214400}
+      FETCHHARBOR_MEDIA_MAX_AUDIO_SECONDS: ${FETCHHARBOR_MEDIA_MAX_AUDIO_SECONDS:-300}
+      FETCHHARBOR_MEDIA_MAX_TTS_CHARACTERS: ${FETCHHARBOR_MEDIA_MAX_TTS_CHARACTERS:-2000}
+    volumes: [media-models:/models:ro]
+    secrets: [media_worker_token]
+    restart: unless-stopped
+    read_only: true
+    # Phonemizer loads a private copy of libespeak from its temporary directory.
+    # The worker is still non-root, capability-free, read-only, and has no egress.
+    tmpfs: ["/tmp:size=256m,mode=1777,exec"]
+    mem_limit: 8g
+    mem_reservation: 2g
+    cpus: 6
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    networks: [media-internal]
+
+  media-model-download:
+    build:
+      context: .
+      dockerfile: Dockerfile.media
+    profiles: ["media-setup"]
+    command: ["python", "-m", "fetchharbor.media_models"]
+    environment:
+      FETCHHARBOR_MEDIA_MODEL_DIR: /models
+      HF_HOME: /models/.cache/huggingface
+      HF_HUB_DISABLE_XET: "1"
+      XDG_CACHE_HOME: /models/.cache
+    volumes: [media-models:/models]
+    restart: "no"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    networks: [edge]
+
+volumes:
+  media-models: {}
+
+secrets:
+  media_worker_token:
+    file: ${FETCHHARBOR_MEDIA_WORKER_TOKEN_SECRET_FILE:-./secrets/media_worker_token.txt}
+
+networks:
+  media-internal:
+    internal: true
