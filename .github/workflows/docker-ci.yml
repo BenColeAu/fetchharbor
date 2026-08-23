@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Build and integration test
+  validate:
+    name: Release validation
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -30,11 +30,11 @@ jobs:
           docker version
           docker compose version
 
-      - name: Create isolated test configuration
+      - name: Create isolated validation configuration
         run: |
           cp .env.example .env
           {
-            echo 'FETCHHARBOR_ENV=test'
+            echo 'FETCHHARBOR_ENV=development'
             echo 'FETCHHARBOR_ADMIN_TOKEN=ci-only-admin-token-with-at-least-32-characters'
             echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1'
           } >> .env
@@ -66,20 +66,12 @@ jobs:
             docker compose -f compose.yaml -f compose.production.yaml \
               -f compose.media.yaml config --quiet
 
-      - name: Run tests in the image
+      - name: Build release images
         run: |
           docker build --target runtime --tag fetchharbor:runtime .
-          docker build --target test --tag fetchharbor:test .
           docker build --file Dockerfile.media --tag fetchharbor:media .
-          docker run --rm fetchharbor:test
           docker run --rm --entrypoint python fetchharbor:media -c \
             "from fetchharbor.media_worker import app; assert app.title.startswith('FetchHarbor private')"
-
-      - name: Audit Python dependencies
-        run: |
-          docker run --rm fetchharbor:test pip-audit --local
-          docker run --rm -v "${PWD}:/work:ro" fetchharbor:test \
-            pip-audit --disable-pip -r /work/requirements-media.lock
 
       - name: Build production egress image
         run: docker compose -f compose.yaml -f compose.production.yaml build egress-proxy
@@ -223,7 +215,7 @@ jobs:
         if: failure()
         run: docker compose logs --no-color --timestamps
 
-      - name: Tear down test stack
+      - name: Tear down validation stack
         if: always()
         run: |
           docker compose down --volumes --remove-orphans

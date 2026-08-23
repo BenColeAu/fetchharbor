@@ -152,7 +152,7 @@ A capability is ready only when:
 - dependency errors fail closed and do not bypass x402;
 - service catalog, OpenAPI, and Bazaar schemas match observed responses;
 - unpaid requests return `402` when payment is enabled;
-- unit tests mock the dependency and an integration test uses the real container;
+- validation should cover mocked failure handling and the real dependency container;
 - image digests, model names/versions, and resource requirements are documented;
 - CPU, memory, disk, and accelerator capacity have been tested under expected load.
 

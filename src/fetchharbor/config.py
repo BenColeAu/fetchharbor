@@ -17,7 +17,10 @@ class Settings(BaseSettings):
     x402_network: str = "eip155:84532"
     x402_pay_to: str = "0x0000000000000000000000000000000000000000"
     x402_asset: str = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
-    x402_asset_name: str = "USDC"
+    # Circle's Base USDC contract signs EIP-3009 authorizations with the
+    # EIP-712 domain name "USD Coin".  This is protocol data, not a display
+    # label: using "USDC" produces signatures that the contract rejects.
+    x402_asset_name: str = "USD Coin"
     x402_asset_version: str = "2"
     x402_asset_decimals: int = Field(default=6, ge=0, le=18)
     x402_max_timeout_seconds: int = Field(default=300, ge=1, le=3600)

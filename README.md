@@ -30,9 +30,9 @@ docker compose up --build -d
 curl http://localhost:8080/health
 ```
 
-Every push and pull request is also tested entirely on a free GitHub-hosted Linux runner. The Docker CI workflow validates Compose, builds the production image, runs tests in an image stage, starts the API, checks container health, exercises public/admin contracts, confirms x402 fails closed, and removes all test resources.
+Every push and pull request is validated on a GitHub-hosted Linux runner. The Docker CI workflow validates Compose, builds and scans the production images, checks the private network topology, performs bounded container health and contract smoke checks, and removes all temporary resources.
 
-Container dependencies are installed from the committed, hash-verified `requirements.lock` and `requirements-test.lock` files. When changing dependency ranges in `pyproject.toml`, regenerate both locks with Python 3.12 and `pip-tools==7.5.3`, review the resolved changes, then rebuild and test the image before committing them.
+Container dependencies are installed from the committed, hash-verified `requirements.lock`. When changing dependency ranges in `pyproject.toml`, regenerate the lock with Python 3.12 and `pip-tools==7.5.3`, review the resolved changes, then rebuild and validate the image before committing it.
 
 Optional profiles remain internal to the Compose network:
 

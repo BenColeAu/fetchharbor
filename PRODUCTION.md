@@ -1,17 +1,17 @@
 # Production readiness
 
-FetchHarbor has a lean hardened deployment path, but mainnet payment readiness still requires an operator-owned end-to-end settlement test. The application does not claim mainnet readiness merely because middleware is installed.
+FetchHarbor has a lean hardened deployment path. Each operator remains responsible for validating their own domain, facilitator credentials, payout address and a deliberately limited-value end-to-end settlement before accepting production traffic.
 
 ## Required before public deployment
 
-1. Run the official x402 middleware on Base Sepolia and prove the unpaid, invalid-payment, verified and settled request paths. A manifest is not payment enforcement. Bazaar indexing occurs only after successful settlement.
+1. Prove the unpaid, invalid-payment, verified and settled request paths with the official x402 middleware. A manifest is not payment enforcement. Bazaar indexing occurs only after successful settlement.
 2. Use a production facilitator for mainnet. The default `https://x402.org/facilitator` is testnet-only; the optional mainnet overlay supports deployment-specific CDP credentials through Docker secrets.
 3. Use `compose.production.yaml` or an equivalent trusted TLS proxy. Do not expose Uvicorn directly to the internet.
 4. Set `FETCHHARBOR_ALLOWED_HOSTS` to the real public hostname and restrict trusted forwarded-header sources at the process or network boundary.
 5. Keep the separate admin process bound to `127.0.0.1`. Never add it to public Caddy, Cloudflare Tunnel, or another ingress. Mount its credential as a Docker secret and use at least 32 random characters.
 6. Keep production container images pinned to reviewed immutable digests. Refresh the tag and digest together through a reviewed dependency-update process.
 7. Run vulnerability and dependency scans in CI, back up the data volume, test restoration, and connect optional external alerting if needed.
-8. Treat `requirements.lock` and `requirements-test.lock` as release artifacts. Regenerate and review them whenever `pyproject.toml` changes; Docker installs only hash-verified resolved dependencies from these files.
+8. Treat `requirements.lock` as a release artifact. Regenerate and review it whenever `pyproject.toml` changes; Docker installs only hash-verified resolved dependencies from this file.
 9. If media is enabled, treat `requirements-media.lock`, the pinned model revision
    and verified model assets as release artifacts and complete [MEDIA.md](MEDIA.md).
 
@@ -85,7 +85,7 @@ the admin listener through public ingress.
 
 ## Release gate
 
-A production release should require passing unit/integration tests, a real testnet verify-and-settle test for every paid route, container build and health-check validation, dependency and image scanning, reverse-proxy/TLS validation, backup restoration, and a rollback exercise.
+A production release should require pre-production contract validation, a limited-value verify-and-settle run for every paid route, container build and health-check validation, dependency and image scanning, reverse-proxy/TLS validation, backup restoration, and a rollback exercise.
 
 The `x402 Testnet Settlement` workflow is manual and uses the protected `x402-testnet` GitHub environment. Add a dedicated Base Sepolia wallet private key as the `EVM_PRIVATE_KEY` environment secret and its public address as the `EVM_WALLET_ADDRESS` environment variable. The workflow verifies that they match, starts FetchHarbor with the wallet as the test recipient, proves the unpaid challenge, performs a signed payment, and requires a successful settlement receipt. Never reuse a mainnet-funded wallet for this test.
 
@@ -214,9 +214,9 @@ The preflight authenticates to the facilitator and verifies advertised Base-main
 
 The application refuses to start if Base mainnet is paired with the testnet-only x402.org facilitator, if the CDP facilitator lacks CDP authentication, or if credentials cannot be read. Other facilitators remain pluggable: configure their URL and `none` authentication when appropriate; support for a new authentication scheme should be implemented as another explicit provider rather than hard-coded headers.
 
-### 6. Deliberately deferred settlement
+### 6. Operator settlement gate
 
-Do not run `scripts/x402_settlement_test.py` with a funded mainnet wallet during deployment preparation. The operator's final release action is a manual, limited-value request from a dedicated release wallet after domain, tunnel/firewall, restore and rollback checks pass. Verify the returned settlement receipt and transaction on Base, confirm the receiving-wallet balance, then decide whether to leave payments enabled.
+Use a dedicated, limited-value wallet only after domain, tunnel/firewall, restore and rollback checks pass. Verify the returned settlement receipt and transaction on Base, confirm the receiving-wallet balance, then decide whether to leave payments enabled. Never store a funded wallet key in the repository, deployment environment file, container image or documentation.
 
 ## Operator references
 

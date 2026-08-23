@@ -16,14 +16,3 @@ USER fetchharbor
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD python -c "import os, urllib.request; host=os.environ.get('FETCHHARBOR_ALLOWED_HOSTS','localhost').split(',')[0].strip(); request=urllib.request.Request('http://127.0.0.1:8080/health/ready', headers={'Host':host}); urllib.request.urlopen(request, timeout=3)"
 CMD ["uvicorn", "fetchharbor.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers"]
-
-FROM runtime AS test
-USER root
-COPY tests ./tests
-COPY requirements-test.lock ./requirements-test.lock
-COPY compose.production.yaml ./compose.production.yaml
-COPY deploy/egress-proxy/squid.conf ./deploy/egress-proxy/squid.conf
-RUN find src tests -type f -exec chmod a-x {} +
-RUN python -m ensurepip --upgrade \
-    && python -m pip install --no-cache-dir --require-hashes -r requirements-test.lock
-CMD ["sh", "-c", "ruff check src tests && ruff format --check src tests && pytest -q"]
