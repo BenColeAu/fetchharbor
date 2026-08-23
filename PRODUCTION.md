@@ -85,13 +85,16 @@ the admin listener through public ingress.
 
 ## Release gate
 
-A production release should require pre-production contract validation, a limited-value verify-and-settle run for every paid route, container build and health-check validation, dependency and image scanning, reverse-proxy/TLS validation, backup restoration, and a rollback exercise.
+A production release should require pre-production contract validation, a limited-value verify-and-settle run for every paid route, container build and health-check validation, dependency and image scanning, reverse-proxy/TLS validation, backup restoration, and a rollback exercise. Keep wallet material outside the repository and pass it only through an operator-controlled secret mechanism.
 
-The `x402 Testnet Settlement` workflow is manual and uses the protected `x402-testnet` GitHub environment. Add a dedicated Base Sepolia wallet private key as the `EVM_PRIVATE_KEY` environment secret and its public address as the `EVM_WALLET_ADDRESS` environment variable. The workflow verifies that they match, starts FetchHarbor with the wallet as the test recipient, proves the unpaid challenge, performs a signed payment, and requires a successful settlement receipt. Never reuse a mainnet-funded wallet for this test.
+The repository deliberately does not contain a funded-wallet settlement runner or
+wallet credentials. Perform final paid validation from an operator-controlled
+environment with a disposable, strictly limited-value wallet. Confirm the challenge
+before signing, stop on the first failure, and retain only public transaction hashes.
 
-## Deferred deployment validation
+## Host-specific deployment validation
 
-The automated gates do not replace host-specific release work. Before accepting production traffic, the operator must still test the actual domain and TLS renewal, VM firewall rules, backup restoration and rollback. Live facilitator authentication and a deliberately limited-value mainnet settlement remain separate release approvals.
+The automated gates do not replace host-specific release work. Before accepting production traffic, each operator must validate the actual domain and TLS renewal, VM firewall rules, backup restoration, rollback, live facilitator authentication and a deliberately limited-value mainnet settlement.
 
 ## Administrator release runbook
 
@@ -184,7 +187,7 @@ Restore onto an isolated host first. Restore the complete backup, start Docker a
 
 ### 4. Rollback
 
-Before each release, retain the last known-good Git commit, resolved image digests and a pre-release whole-host backup. If health or payment verification fails, disconnect public ingress, stop the new project, restore the backup, check out the recorded commit, rebuild using its pinned dependencies/images, and start with the previous configuration. Verify health, unpaid `402` behavior, admin isolation and a testnet paid request before reconnecting ingress. Never roll application code backward while retaining a newer, incompatible data volume unless that release explicitly documents compatibility.
+Before each release, retain the last known-good Git commit, resolved image digests and a pre-release whole-host backup. If health or payment verification fails, disconnect public ingress, stop the new project, restore the backup, check out the recorded commit, rebuild using its pinned dependencies/images, and start with the previous configuration. Verify health, unpaid `402` behavior, admin isolation and a limited-value paid request before reconnecting ingress. Never roll application code backward while retaining a newer, incompatible data volume unless that release explicitly documents compatibility.
 
 ### 5. Base mainnet configuration (no settlement)
 

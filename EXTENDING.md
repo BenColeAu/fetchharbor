@@ -49,7 +49,8 @@ metadata. Likewise, do not declare methods that the router does not implement.
    examples to `.env.example`; use Docker secrets for credentials.
 7. If the dependency needs another container, add it through an optional Compose
    profile or overlay. Keep it off the host network and avoid publishing its port.
-8. Add contract, validation, dependency-failure, discovery, and x402 tests.
+8. Validate contracts, input bounds, dependency failures, discovery metadata and
+   x402 challenges in an isolated deployment before publishing the route.
 9. Rebuild the image. Startup registration occurs when the application imports, so
    a restart is required to add or remove a service or change protected pricing.
 

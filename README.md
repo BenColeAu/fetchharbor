@@ -59,14 +59,14 @@ The overlay reserves one NVIDIA GPU for Ollama only. Omit it for CPU fallback.
 
 Enable the built-in chat service with `FETCHHARBOR_OLLAMA_ENABLED=true`. It is
 registered only when enabled, so disabled deployments do not advertise an
-unavailable route. See [EXTENDING.md](EXTENDING.md) for configuration and testing.
+unavailable route. See [EXTENDING.md](EXTENDING.md) for configuration and validation.
 
 ## Add a service
 
 Create a module under `src/fetchharbor/services`, expose an `APIRouter` and one `ServiceDefinition`, then add it to `BUILTIN_SERVICES`. The registry adds its router, service catalog entry, x402 requirements and Bazaar discovery metadata.
 
 See [EXTENDING.md](EXTENDING.md) for the universal plug-and-play service contract,
-configuration and security checklist, testing requirements, and a complete Ollama
+configuration and security checklist, validation requirements, and a complete Ollama
 chat adapter example. The same pattern supports local functions, internal
 containers, hosted APIs, databases, queues, and other providers.
 

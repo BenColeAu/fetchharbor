@@ -146,19 +146,19 @@ jobs:
             up --build --wait --wait-timeout 120 \
               api egress-proxy admin admin-loopback
 
-          api_container=fetchharbor-prod-ci-api-1
+          runtime_container=fetchharbor-prod-ci-api-1
           admin_container=fetchharbor-prod-ci-admin-1
           docker inspect --format \
             'networks={{json .NetworkSettings.Networks}} port_bindings={{json .HostConfig.PortBindings}}' \
-            "${api_container}"
-          test "$(docker inspect --format '{{json .NetworkSettings.Networks}}' "${api_container}" \
+            "${runtime_container}"
+          test "$(docker inspect --format '{{json .NetworkSettings.Networks}}' "${runtime_container}" \
             | python -c 'import json,sys; print(len(json.load(sys.stdin)))')" = '1'
-          docker inspect "${api_container}" \
+          docker inspect "${runtime_container}" \
             | python -c 'import json,sys; assert not json.load(sys.stdin)[0]["HostConfig"]["PortBindings"]'
-          docker exec "${api_container}" sh -c 'test -w /app/data'
-          docker exec "${api_container}" python -c \
+          docker exec "${runtime_container}" sh -c 'test -w /app/data'
+          docker exec "${runtime_container}" python -c \
             "import httpx; response=httpx.get('http://127.0.0.1:8080/health/ready', headers={'Host':'localhost'}, trust_env=False); response.raise_for_status(); assert response.json()['status'] == 'ready'"
-          docker exec "${api_container}" python -c \
+          docker exec "${runtime_container}" python -c \
             "import httpx; response=httpx.get('http://127.0.0.1:8080/scrape', params={'url':'https://example.com/'}, headers={'Host':'localhost'}, timeout=30, trust_env=False); response.raise_for_status(); assert response.json()['status'] == 'success'"
           docker exec "${api_container}" python -c \
             "import httpx; assert httpx.get('http://127.0.0.1:8080/admin', headers={'Host':'localhost'}, trust_env=False).status_code == 404"

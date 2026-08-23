@@ -121,8 +121,9 @@ Before enabling paid traffic:
    requests and confirm bounded `4xx` responses.
 5. Validate each live 402 response with Agentic Market Seller Tools. Bazaar uses
    the declared JSON example when probing POST endpoints.
-6. Run a testnet verify-and-settle request for each paid route. Keep the final
-   deliberately limited mainnet settlement as an operator approval.
+6. Validate verification and settlement for each paid route from an
+   operator-controlled environment. Keep any mainnet value deliberately limited
+   and require explicit operator approval.
 
 References: [x402 v2 specification](https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v2.md),
 [Coinbase x402 FAQ](https://docs.cdp.coinbase.com/x402/support/faq),
