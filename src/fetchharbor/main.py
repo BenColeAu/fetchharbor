@@ -14,6 +14,7 @@ from .discovery import x402_manifest
 from .payments import install_x402
 from .public import render_landing
 from .registry import ServiceRegistry
+from .runtime_status import write_runtime_status
 from .services import configured_services
 
 settings = get_settings()
@@ -32,6 +33,7 @@ app.mount(
 )
 configuration_store = ConfigurationStore(settings)
 metrics.configure_shared_events(settings.request_event_path, writer=True)
+write_runtime_status(settings, len(registry.services))
 service_methods = {
     service.path: tuple(method.upper() for method in service.methods)
     for service in registry.services
@@ -54,6 +56,7 @@ async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
 
 
 async def security_headers(request: Request, call_next):
+    configuration_store.refresh_live()
     allowed_methods = service_methods.get(request.url.path)
     if allowed_methods and request.method not in allowed_methods:
         response = JSONResponse(
@@ -135,6 +138,7 @@ async def readiness() -> dict:
                 pass
         except OSError as exc:
             raise HTTPException(503, "Persistent storage is not writable") from exc
+    write_runtime_status(settings, len(registry.services))
     return {"status": "ready", "services": len(registry.services)}
 
 

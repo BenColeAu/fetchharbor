@@ -15,7 +15,7 @@ FetchHarbor has a lean hardened deployment path, but mainnet payment readiness s
 
 ## Scaling limitations
 
-Monitoring counters and authentication throttles are in process memory. The latest 100 sanitized public request events and runtime configuration are shared with the loopback-only admin process through bounded files in the private data volume. These mechanisms are deliberately scoped to one host. Before horizontal scaling, move throttling to a shared service or edge proxy and configuration/audit data to a transactional shared database.
+Monitoring counters and authentication throttles are in process memory. The latest 100 sanitized public request events, runtime configuration and a secret-free public-process health snapshot are shared with the loopback-only admin process through bounded files in the private data volume. Live operational settings are reloaded after a protected admin save; payment, pricing, payout, network, asset and facilitator fields stay staged until restart. These mechanisms are deliberately scoped to one host. Before horizontal scaling, move throttling to a shared service or edge proxy and configuration/audit data to a transactional shared database.
 
 ## Optional Ollama chat service
 

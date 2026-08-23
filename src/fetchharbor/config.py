@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     admin_config_path: Path = Path("data/admin-config.json")
     audit_log_path: Path = Path("data/admin-audit.jsonl")
     request_event_path: Path = Path("data/request-events.jsonl")
+    runtime_status_path: Path = Path("data/runtime-status.json")
     security_headers_enabled: bool = True
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     outbound_proxy_url: str = ""
