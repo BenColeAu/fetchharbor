@@ -117,7 +117,7 @@ No Prometheus, Grafana, Redis or PostgreSQL services are included. Built-in boun
 
 ## Admin control plane
 
-Production Compose enables the private admin process and reads its strong token from the Docker secret. Open `http://127.0.0.1:8081`; its root redirects to `/admin`. The dashboard retains its authenticated settings, service pricing, security posture, audit trail, and recent-request view. The public process shares at most 100 sanitized events through the private data volume; bodies, query strings, authorization data, credentials, and payment headers are never written. Pricing and payout-address changes are persisted for the next restart.
+Production Compose enables the private admin process and reads its strong token from the Docker secret. Open `http://127.0.0.1:8081`; its root redirects to `/admin`. The dashboard retains its authenticated settings, service pricing, security posture, audit trail, and recent-request view. The public process shares at most 100 sanitized events and a secret-free runtime-health snapshot through the private data volume; bodies, query strings, authorization data, credentials, proxy addresses, and payment headers are never written. Operational settings marked live are reloaded by the public process after saving. Payment, pricing, payout, network, asset and facilitator changes remain staged until a deliberate restart.
 
 Admin is absent from the public process. Never add its loopback port to Cloudflare Tunnel, Caddy, a router, or another ingress. For remote administration, use an operator-controlled SSH port forward or private VPN to host loopback. See [PRODUCTION.md](PRODUCTION.md) for release blockers and deployment requirements.
 

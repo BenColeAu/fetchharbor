@@ -68,6 +68,7 @@ class ConfigurationStore:
         self.audit_path = Path(settings.audit_log_path)
         self._lock = Lock()
         self.apply(self._validated_settings(self._read()))
+        self._last_mtime_ns = self._mtime_ns()
         self._active_restart_values = {
             field: getattr(settings, field) for field in RESTART_REQUIRED_FIELDS
         }
@@ -79,6 +80,32 @@ class ConfigurationStore:
         return AdminConfiguration.model_validate(values).model_dump(
             exclude_none=True, mode="json"
         )
+
+    def _mtime_ns(self) -> int | None:
+        try:
+            return self.path.stat().st_mtime_ns
+        except FileNotFoundError:
+            return None
+
+    def refresh_live(self) -> bool:
+        """Apply externally persisted non-restart settings when the file changes."""
+        current_mtime = self._mtime_ns()
+        if current_mtime == self._last_mtime_ns:
+            return False
+        with self._lock:
+            current_mtime = self._mtime_ns()
+            if current_mtime == self._last_mtime_ns:
+                return False
+            values = self._validated_settings(self._read())
+            self.apply(
+                {
+                    key: value
+                    for key, value in values.items()
+                    if key not in RESTART_REQUIRED_FIELDS
+                }
+            )
+            self._last_mtime_ns = current_mtime
+        return True
 
     def current(self) -> dict[str, Any]:
         current = {
@@ -122,6 +149,7 @@ class ConfigurationStore:
             temporary = self.path.with_suffix(".tmp")
             temporary.write_text(json.dumps(current, indent=2), encoding="utf-8")
             temporary.replace(self.path)
+            self._last_mtime_ns = self._mtime_ns()
             live_changes = {
                 key: value
                 for key, value in changes.items()

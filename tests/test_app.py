@@ -10,6 +10,11 @@ from fetchharbor.admin.store import AdminConfiguration, ConfigurationStore
 from fetchharbor.admin_app import app as private_admin_app
 from fetchharbor.config import Settings
 from fetchharbor.main import app, settings
+from fetchharbor.runtime_status import (
+    read_runtime_status,
+    runtime_status_is_fresh,
+    write_runtime_status,
+)
 from fetchharbor.services.scrape import _validate_public_url
 
 client = TestClient(app)
@@ -572,6 +577,12 @@ def test_admin_dashboard_escapes_dynamic_values() -> None:
         assert "Recent incoming requests" in response.text
         assert "refreshed every 10 seconds" in response.text
         assert "o.metrics.recent" in response.text
+        assert "DOMContentLoaded',()=>loadAll(true)" in response.text
+        assert "silent&&e.status===401" in response.text
+        assert (
+            "Enter the admin token to load the protected control plane."
+            in response.text
+        )
     finally:
         settings.admin_enabled, settings.admin_host = previous_enabled, previous_host
 
@@ -611,6 +622,82 @@ def test_private_admin_can_read_sanitized_public_request_history(tmp_path) -> No
     assert event["route"] == "GET /services"
     assert event["source_ip"] == "203.0.113.0/24"
     assert "body" not in event and "query" not in event
+
+
+def test_public_runtime_status_is_sanitized_and_fresh(tmp_path) -> None:
+    configured = Settings(
+        runtime_status_path=tmp_path / "runtime-status.json",
+        outbound_proxy_url="http://egress-proxy:3128",
+        require_outbound_proxy=True,
+    )
+    write_runtime_status(configured, 4)
+    status = read_runtime_status(configured.runtime_status_path)
+
+    assert runtime_status_is_fresh(status)
+    assert status["outbound_proxy_configured"] is True
+    assert status["outbound_proxy_required"] is True
+    assert "outbound_proxy_url" not in status
+
+
+def test_admin_security_uses_fresh_public_runtime_status(tmp_path) -> None:
+    previous = (
+        settings.admin_enabled,
+        settings.admin_token,
+        settings.admin_host,
+        settings.runtime_status_path,
+    )
+    settings.admin_enabled = True
+    settings.admin_token = "a-secure-test-token-that-is-long-enough"
+    settings.admin_host = "testserver"
+    settings.runtime_status_path = tmp_path / "runtime-status.json"
+    public_settings = Settings(
+        runtime_status_path=settings.runtime_status_path,
+        outbound_proxy_url="http://egress-proxy:3128",
+        require_outbound_proxy=True,
+    )
+    try:
+        write_runtime_status(public_settings, 4)
+        response = admin_client.get(
+            "/admin/api/security", headers={"X-Admin-Token": settings.admin_token}
+        )
+        assert response.status_code == 200
+        outbound = next(
+            check
+            for check in response.json()["checks"]
+            if check["name"] == "Outbound request policy"
+        )
+        assert outbound["status"] == "pass"
+        assert "restricted egress proxy" in outbound["detail"]
+    finally:
+        (
+            settings.admin_enabled,
+            settings.admin_token,
+            settings.admin_host,
+            settings.runtime_status_path,
+        ) = previous
+
+
+def test_public_process_refreshes_only_live_configuration(tmp_path) -> None:
+    config_path = tmp_path / "admin-config.json"
+    public_settings = Settings(
+        admin_config_path=config_path,
+        audit_log_path=tmp_path / "public-audit.jsonl",
+    )
+    public_store = ConfigurationStore(public_settings)
+    admin_settings = Settings(
+        admin_config_path=config_path,
+        audit_log_path=tmp_path / "admin-audit.jsonl",
+    )
+    admin_store = ConfigurationStore(admin_settings)
+    admin_store.update(
+        AdminConfiguration(request_timeout_seconds=42, price_scrape_usdc="0.25"),
+        "test",
+    )
+
+    assert public_store.refresh_live() is True
+    assert public_settings.request_timeout_seconds == 42
+    assert public_settings.price_scrape_usdc == "0.01"
+    assert public_store.refresh_live() is False
 
 
 def test_cloudflare_request_source_is_validated_and_masked() -> None:

@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..config import Settings
 from ..registry import ServiceRegistry
+from ..runtime_status import read_runtime_status, runtime_status_is_fresh
 from .dashboard import DASHBOARD_HTML
 from .metrics import MetricsStore
 from .store import AdminConfiguration, ConfigurationStore
@@ -232,6 +233,12 @@ def build_admin_router(
     async def security(_: str = Depends(authorize)) -> dict:
         token = settings.resolved_admin_token()
         credentials = store.facilitator_credentials_status()
+        runtime = read_runtime_status(settings.runtime_status_path)
+        outbound_enforced = bool(
+            runtime_status_is_fresh(runtime)
+            and runtime.get("outbound_proxy_configured") is True
+            and runtime.get("outbound_proxy_required") is True
+        )
         checks = [
             {
                 "name": "Admin authentication",
@@ -250,8 +257,12 @@ def build_admin_router(
             },
             {
                 "name": "Outbound request policy",
-                "status": "pass" if settings.outbound_proxy_url else "warning",
-                "detail": "Production should use the restricted egress proxy.",
+                "status": "pass" if outbound_enforced else "warning",
+                "detail": (
+                    "The public API requires its configured restricted egress proxy."
+                    if outbound_enforced
+                    else "The public API has not reported enforced restricted egress."
+                ),
             },
             {
                 "name": "Facilitator credentials",
@@ -274,6 +285,7 @@ def build_admin_router(
             "checks": checks,
             "audit": store.audit_events(),
             "facilitator_credentials": credentials,
+            "public_runtime": runtime,
         }
 
     return router
