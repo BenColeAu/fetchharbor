@@ -140,6 +140,8 @@ docker compose -f compose.yaml -f compose.production.yaml -f compose.cloudflare-
 
 The Cloudflare overlay places the direct Caddy ingress behind the inactive `direct-ingress` profile, publishes no host ports, and runs `cloudflared` from an immutable image digest. FetchHarbor also rejects admin routes unless the request host exactly matches `FETCHHARBOR_ADMIN_HOST`. Do not disable that check. If Cloudflare Browser Integrity Check or another WAF rule blocks non-browser API clients, add a narrowly scoped API-path exception rather than disabling zone-wide protection.
 
+The Cloudflare overlay also selects `FETCHHARBOR_REQUEST_SOURCE_PROXY=cloudflare`, allowing the protected admin dashboard to attribute requests using Cloudflare's overwritten `CF-Connecting-IP`, `CF-IPCountry`, and `CF-Ray` headers. This is safe only while the origin remains private. The default privacy mode stores masked `/24` IPv4 and `/48` IPv6 networks in a bounded in-memory buffer; administrators can select full, masked, hidden, or disabled source collection and a 60-second to seven-day retention window. The buffer still holds at most 100 events and is cleared on restart. Country values are approximate. FetchHarbor never retains query strings, request bodies, authorization data, payment headers, or credentials in this monitoring buffer.
+
 #### Cloudflare edge hardening
 
 The tunnel prevents direct origin access, but it does not by itself decide whether

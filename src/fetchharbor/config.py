@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     outbound_proxy_url: str = ""
     require_outbound_proxy: bool = False
+    request_source_tracking_enabled: bool = True
+    request_source_proxy: Literal["direct", "cloudflare"] = "direct"
+    request_source_ip_mode: Literal["full", "masked", "none"] = "masked"
+    request_source_retention_seconds: int = Field(default=86400, ge=60, le=604800)
 
     @field_validator(
         "admin_token_file",

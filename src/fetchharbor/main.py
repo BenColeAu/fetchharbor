@@ -32,7 +32,6 @@ app.mount(
     "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
 )
 configuration_store = ConfigurationStore(settings)
-app.middleware("http")(monitoring_middleware)
 service_methods = {
     service.path: tuple(method.upper() for method in service.methods)
     for service in registry.services
@@ -95,6 +94,9 @@ async def security_headers(request: Request, call_next):
 for service in registry.services:
     app.include_router(service.router, tags=[service.name])
 install_x402(app, registry, settings)
+# Register monitoring after x402 so middleware-generated payment challenges and
+# settlement failures are included in the lightweight request history.
+app.middleware("http")(monitoring_middleware)
 # Register this after x402 so it remains outside middleware-generated 402
 # responses as well as ordinary application responses.
 app.middleware("http")(security_headers)

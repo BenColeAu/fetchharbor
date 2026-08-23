@@ -174,7 +174,7 @@ def build_admin_router(
                 "asset": settings.x402_asset,
                 "receiving_wallet": settings.x402_pay_to,
             },
-            "metrics": metrics.snapshot(),
+            "metrics": metrics.snapshot(settings.request_source_retention_seconds),
             "services": registry.catalog(),
         }
 
@@ -259,6 +259,17 @@ def build_admin_router(
                 "name": "Facilitator credentials",
                 "status": "pass" if credentials["configured"] else "warning",
                 "detail": "Secrets are never returned by the admin API or included in audit events.",
+            },
+            {
+                "name": "Request source attribution",
+                "status": "pass"
+                if settings.request_source_tracking_enabled
+                else "warning",
+                "detail": (
+                    "Cloudflare headers are enabled; keep the origin private."
+                    if settings.request_source_proxy == "cloudflare"
+                    else "Using the direct network peer address."
+                ),
             },
         ]
         return {

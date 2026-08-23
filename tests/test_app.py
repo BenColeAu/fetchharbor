@@ -2,9 +2,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+from fastapi import Request
 from fastapi.testclient import TestClient
 
-from fetchharbor.admin.metrics import MetricsStore
+from fetchharbor.admin.metrics import MetricsStore, request_source
 from fetchharbor.admin.store import AdminConfiguration, ConfigurationStore
 from fetchharbor.config import Settings
 from fetchharbor.main import app, settings
@@ -522,8 +523,84 @@ def test_recent_request_monitoring_is_bounded_and_payload_free() -> None:
     recent = monitoring.snapshot()["recent"]
     assert len(recent) == 100
     assert recent[0]["route"] == "GET /route-124"
-    assert set(recent[0]) == {"route", "status", "duration_ms", "at"}
+    assert set(recent[0]) == {
+        "route",
+        "status",
+        "duration_ms",
+        "at",
+        "source_ip",
+        "country",
+        "ray_id",
+        "user_agent",
+    }
     assert all("query" not in event and "body" not in event for event in recent)
+
+
+def test_cloudflare_request_source_is_validated_and_masked() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/health",
+            "headers": [
+                (b"cf-connecting-ip", b"203.0.113.42"),
+                (b"cf-ipcountry", b"AU"),
+                (b"cf-ray", b"abc123-SYD"),
+                (b"user-agent", b"test-client"),
+            ],
+            "client": ("172.20.0.4", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "query_string": b"secret=not-retained",
+        }
+    )
+    configured = Settings(
+        request_source_proxy="cloudflare", request_source_ip_mode="masked"
+    )
+    source = request_source(request, configured)
+    assert source == {
+        "source_ip": "203.0.113.0/24",
+        "country": "AU",
+        "ray_id": "abc123-SYD",
+        "user_agent": "test-client",
+    }
+    assert "secret" not in str(source)
+
+
+def test_direct_source_mode_ignores_spoofed_cloudflare_headers() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/health",
+            "headers": [(b"cf-connecting-ip", b"198.51.100.10")],
+            "client": ("192.0.2.25", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+    source = request_source(request, Settings(request_source_ip_mode="full"))
+    assert source["source_ip"] == "192.0.2.25"
+    assert source["country"] is None
+    assert source["ray_id"] is None
+
+
+def test_ipv6_source_mask_uses_a_real_48_bit_network() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/health",
+            "headers": [],
+            "client": ("2001:db8:abcd:1234::42", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+    source = request_source(request, Settings(request_source_ip_mode="masked"))
+    assert source["source_ip"] == "2001:db8:abcd::/48"
 
 
 def test_invalid_facilitator_secret_is_not_reflected(tmp_path) -> None:
