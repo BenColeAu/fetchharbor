@@ -29,6 +29,8 @@ curl http://localhost:8080/health
 
 Every push and pull request is also tested entirely on a free GitHub-hosted Linux runner. The Docker CI workflow validates Compose, builds the production image, runs tests in an image stage, starts the API, checks container health, exercises public/admin contracts, confirms x402 fails closed, and removes all test resources.
 
+Container dependencies are installed from the committed, hash-verified `requirements.lock` and `requirements-test.lock` files. When changing dependency ranges in `pyproject.toml`, regenerate both locks with Python 3.12 and `pip-tools==7.5.3`, review the resolved changes, then rebuild and test the image before committing them.
+
 Optional profiles remain internal to the Compose network:
 
 ```bash
@@ -103,21 +105,21 @@ The committed `.env.example` uses only inert placeholders. Operators copy it to 
 
 The API container runs as an unprivileged user with a read-only filesystem, health check, restart policy, CPU/memory boundaries, and an isolated internal network. Ollama is never published to the host by default.
 
-For a lean production stack, create `secrets/admin_token.txt`, set the two hostnames in `.env`, then run:
+For a lean production stack, create `secrets/admin_token.txt`, set the public hostname in `.env`, then run:
 
 ```bash
 docker compose -f compose.yaml -f compose.production.yaml up --build -d
 ```
 
-This adds only Caddy and a restricted Squid egress proxy. Caddy terminates HTTPS and hides `/admin` on the public hostname; the admin hostname should additionally be restricted by your VPN, tunnel or identity-aware access layer. The API has no direct edge-network attachment in this deployment. Scraping and facilitator traffic leave through the proxy, which rejects private, local, metadata and reserved destinations.
+This adds Caddy, a restricted Squid egress proxy, and a separate private admin process. Caddy serves only the public API. The public process does not register admin routes, and Docker publishes the admin process only on `127.0.0.1:8081`. The API has no direct edge-network attachment in this deployment.
 
 No Prometheus, Grafana, Redis or PostgreSQL services are included. Built-in bounded monitoring and JSON/audit storage remain intentionally single-VM features.
 
 ## Admin control plane
 
-Set `FETCHHARBOR_ADMIN_ENABLED=true`, supply a strong token (preferably with `FETCHHARBOR_ADMIN_TOKEN_FILE`), and open the separately protected admin hostname; its root redirects to `/admin`. After sign-in, the browser uses a short-lived, signed, HttpOnly session cookie, so refreshes do not require the token again and browser scripts cannot read it. The consolidated dashboard provides process/host and per-route monitoring, a lightweight recent-request view, editable allow-listed runtime settings, service pricing, security posture checks, and a payload-free configuration audit trail. Recent monitoring is bounded to 100 in-memory events and never records bodies, query strings, client addresses, credentials, or payment headers. Pricing and payout-address changes are persisted for the next restart so discovery metadata and payment enforcement cannot disagree during a running process.
+Production Compose enables the private admin process and reads its strong token from the Docker secret. Open `http://127.0.0.1:8081`; its root redirects to `/admin`. The dashboard retains its authenticated settings, service pricing, security posture, audit trail, and recent-request view. The public process shares at most 100 sanitized events through the private data volume; bodies, query strings, authorization data, credentials, and payment headers are never written. Pricing and payout-address changes are persisted for the next restart.
 
-Admin is disabled by default. Do not publish it directly to the internet; place it behind a VPN, private ingress, or an additional identity-aware proxy. See [PRODUCTION.md](PRODUCTION.md) for release blockers and deployment requirements.
+Admin is absent from the public process. Never add its loopback port to Cloudflare Tunnel, Caddy, a router, or another ingress. For remote administration, use an operator-controlled SSH port forward or private VPN to host loopback. See [PRODUCTION.md](PRODUCTION.md) for release blockers and deployment requirements.
 
 The optional `compose.cloudflare-tunnel.yaml` overlay replaces direct Caddy ingress with a pinned, outbound-only Cloudflare Tunnel connector. The optional `compose.mainnet.yaml` overlay mounts CDP facilitator credentials without placing them in `.env`. See [PRODUCTION.md](PRODUCTION.md) for the exact release sequence.
 

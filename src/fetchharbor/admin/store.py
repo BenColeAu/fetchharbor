@@ -29,6 +29,14 @@ class AdminConfiguration(BaseModel):
     x402_asset: str | None = Field(default=None, pattern=r"^0x[0-9a-fA-F]{40}$")
     x402_facilitator: HttpUrl | None = None
     x402_facilitator_auth: str | None = Field(default=None, pattern="^(none|cdp)$")
+    request_source_tracking_enabled: bool | None = None
+    request_source_proxy: str | None = Field(
+        default=None, pattern="^(direct|cloudflare)$"
+    )
+    request_source_ip_mode: str | None = Field(
+        default=None, pattern="^(full|masked|none)$"
+    )
+    request_source_retention_seconds: int | None = Field(default=None, ge=60, le=604800)
 
     @field_validator("x402_pay_to")
     @classmethod

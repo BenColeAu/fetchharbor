@@ -13,10 +13,13 @@ def bazaar_extensions(service, method: str) -> dict[str, Any]:
     if body_type is None and method.upper() in {"POST", "PUT", "PATCH"}:
         body_type = "json"
     extensions = declare_discovery_extension(
-        input=service.input_example,
-        input_schema=service.input_schema,
+        input=service.input_example_for(method),
+        input_schema=service.input_schema_for(method),
         body_type=body_type,
-        output=OutputConfig(example=service.output_example),
+        output=OutputConfig(
+            example=service.output_example,
+            schema=service.output_schema or None,
+        ),
     )
     # The HTTP middleware normally enriches this at request time. The static
     # manifest has no request context, so declare the known route method here.

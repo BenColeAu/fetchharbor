@@ -1,4 +1,8 @@
 services:
+  api:
+    environment:
+      FETCHHARBOR_REQUEST_SOURCE_PROXY: cloudflare
+
   ingress:
     profiles: ["direct-ingress"]
 

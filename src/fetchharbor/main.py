@@ -3,12 +3,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .admin.metrics import metrics, monitoring_middleware
-from .admin.router import build_admin_router
 from .admin.store import ConfigurationStore
 from .config import get_settings
 from .discovery import x402_manifest
@@ -32,7 +31,7 @@ app.mount(
     "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
 )
 configuration_store = ConfigurationStore(settings)
-app.middleware("http")(monitoring_middleware)
+metrics.configure_shared_events(settings.request_event_path, writer=True)
 service_methods = {
     service.path: tuple(method.upper() for method in service.methods)
     for service in registry.services
@@ -95,16 +94,16 @@ async def security_headers(request: Request, call_next):
 for service in registry.services:
     app.include_router(service.router, tags=[service.name])
 install_x402(app, registry, settings)
+# Register monitoring after x402 so middleware-generated payment challenges and
+# settlement failures are included in the lightweight request history.
+app.middleware("http")(monitoring_middleware)
 # Register this after x402 so it remains outside middleware-generated 402
 # responses as well as ordinary application responses.
 app.middleware("http")(security_headers)
-app.include_router(build_admin_router(settings, registry, metrics, configuration_store))
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def landing(request: Request) -> Response:
-    if settings.admin_host and request.url.hostname == settings.admin_host:
-        return RedirectResponse(url="/admin", status_code=307)
     return HTMLResponse(render_landing(registry, settings))
 
 

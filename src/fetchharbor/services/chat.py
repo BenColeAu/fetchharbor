@@ -94,7 +94,25 @@ async def ollama_chat(message: str) -> ChatResponse:
     )
 
 
-@router.post("/chat", response_model=ChatResponse, summary="chat", operation_id="chat")
+CHAT_ERRORS = {
+    402: {"description": "A valid x402 payment is required."},
+    413: {"description": "The prompt exceeds the configured character limit."},
+    422: {"description": "The JSON body is invalid or the message is empty."},
+    502: {
+        "description": "The configured model returned an invalid or rejected response."
+    },
+    503: {"description": "The local model is unavailable or at its concurrency limit."},
+    504: {"description": "The model request timed out."},
+}
+
+
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    summary="chat",
+    operation_id="chat",
+    responses=CHAT_ERRORS,
+)
 async def chat(request: ChatRequest) -> ChatResponse:
     return await ollama_chat(request.message)
 
@@ -104,7 +122,12 @@ definition = ServiceDefinition(
     path="/chat",
     methods=("POST",),
     price_usdc="0.01",
-    description="Return a bounded chat response from the configured Ollama model.",
+    description=(
+        "Generate one bounded assistant response with the operator's self-hosted "
+        "Ollama model. Use for short, single-message inference where local processing "
+        "is preferred. Accepts up to 8,000 characters and returns the model name, "
+        "response text, and token counts when Ollama supplies them."
+    ),
     router=router,
     input_schema={
         "type": "object",
@@ -121,5 +144,23 @@ definition = ServiceDefinition(
         "response": "Hello! How can I help?",
         "prompt_tokens": 14,
         "response_tokens": 8,
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string", "const": "success"},
+            "model": {"type": "string"},
+            "response": {"type": "string"},
+            "prompt_tokens": {"type": ["integer", "null"], "minimum": 0},
+            "response_tokens": {"type": ["integer", "null"], "minimum": 0},
+        },
+        "required": [
+            "status",
+            "model",
+            "response",
+            "prompt_tokens",
+            "response_tokens",
+        ],
+        "additionalProperties": False,
     },
 )
