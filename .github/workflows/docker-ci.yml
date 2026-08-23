@@ -35,9 +35,8 @@ jobs:
           cp .env.example .env
           {
             echo 'FETCHHARBOR_ENV=test'
-            echo 'FETCHHARBOR_ADMIN_ENABLED=true'
             echo 'FETCHHARBOR_ADMIN_TOKEN=ci-only-admin-token-with-at-least-32-characters'
-            echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1,admin.fetchharbor.example.com'
+            echo 'FETCHHARBOR_ALLOWED_HOSTS=localhost,127.0.0.1'
           } >> .env
 
       - name: Validate Compose configuration
@@ -49,22 +48,17 @@ jobs:
           printf '%s' 'ci-validation-key-secret' > secrets/cdp_api_key_secret.txt
           printf '%s' 'ci-validation-tunnel-token' > secrets/cloudflare_tunnel_token.txt
           FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
-          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml config --quiet
           FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
-          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml \
               -f compose.mainnet.yaml config --quiet
           FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
-          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml \
               -f compose.cloudflare-tunnel.yaml config --quiet
           FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
-          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml \
               -f compose.ollama-download.yaml --profile ollama config --quiet
           FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
-          FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             docker compose -f compose.yaml -f compose.production.yaml \
               -f compose.gpu.yaml --profile ollama config --quiet
 
@@ -81,13 +75,11 @@ jobs:
         run: docker compose -f compose.yaml -f compose.production.yaml build egress-proxy
         env:
           FETCHHARBOR_PUBLIC_HOST: fetchharbor.example.com
-          FETCHHARBOR_ADMIN_HOST: admin.fetchharbor.example.com
 
       - name: Validate Caddy configuration
         run: |
           docker run --rm \
             -e FETCHHARBOR_PUBLIC_HOST=fetchharbor.example.com \
-            -e FETCHHARBOR_ADMIN_HOST=admin.fetchharbor.example.com \
             -v "${PWD}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d \
             caddy validate --config /etc/caddy/Caddyfile
@@ -132,14 +124,16 @@ jobs:
         env:
           FETCHHARBOR_ENV: production
           FETCHHARBOR_PUBLIC_HOST: fetchharbor.example.com
-          FETCHHARBOR_ADMIN_HOST: admin.fetchharbor.example.com
+          ADMIN_TOKEN: ci-only-admin-token-with-at-least-32-characters
         run: |
           set -euo pipefail
           docker compose -p fetchharbor-prod-ci \
             -f compose.yaml -f compose.production.yaml \
-            up --build --wait --wait-timeout 120 api egress-proxy
+            up --build --wait --wait-timeout 120 \
+              api egress-proxy admin admin-loopback
 
           api_container=fetchharbor-prod-ci-api-1
+          admin_container=fetchharbor-prod-ci-admin-1
           docker inspect --format \
             'networks={{json .NetworkSettings.Networks}} port_bindings={{json .HostConfig.PortBindings}}' \
             "${api_container}"
@@ -152,6 +146,26 @@ jobs:
             "import httpx; response=httpx.get('http://127.0.0.1:8080/health/ready', headers={'Host':'localhost'}, trust_env=False); response.raise_for_status(); assert response.json()['status'] == 'ready'"
           docker exec "${api_container}" python -c \
             "import httpx; response=httpx.get('http://127.0.0.1:8080/scrape', params={'url':'https://example.com/'}, headers={'Host':'localhost'}, timeout=30, trust_env=False); response.raise_for_status(); assert response.json()['status'] == 'success'"
+          docker exec "${api_container}" python -c \
+            "import httpx; assert httpx.get('http://127.0.0.1:8080/admin', headers={'Host':'localhost'}, trust_env=False).status_code == 404"
+          test "$(docker inspect --format '{{json .NetworkSettings.Networks}}' "${admin_container}" \
+            | python -c 'import json,sys; print(len(json.load(sys.stdin)))')" = '1'
+          test "$(curl --silent --output /tmp/admin-unauthorized.json --write-out '%{http_code}' \
+            http://127.0.0.1:8081/admin/api/overview)" = '401'
+          curl --fail --silent --show-error \
+            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+            http://127.0.0.1:8081/admin/api/overview \
+            | tee /tmp/admin.json
+          grep --fixed-strings '"service_count":3' /tmp/admin.json
+          test "$(curl --silent --output /tmp/x402-enable.json --write-out '%{http_code}' \
+            -X PUT -H "X-Admin-Token: ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
+            --data '{"payment_mode":"x402"}' \
+            http://127.0.0.1:8081/admin/api/configuration)" = '422'
+          curl --fail --silent --show-error \
+            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+            http://127.0.0.1:8081/admin/api/security \
+            | tee /tmp/security.json
+          grep --fixed-strings '"status":"warning"' /tmp/security.json
 
       - name: Tear down production topology
         if: always()
@@ -163,9 +177,7 @@ jobs:
       - name: Start the Compose API
         run: docker compose up --build --wait --wait-timeout 120 api
 
-      - name: Exercise public and admin contracts
-        env:
-          ADMIN_TOKEN: ci-only-admin-token-with-at-least-32-characters
+      - name: Exercise public contracts
         run: |
           set -euo pipefail
           curl --fail --silent --show-error http://127.0.0.1:8080/health | tee /tmp/health.json
@@ -176,26 +188,8 @@ jobs:
             | tee /tmp/markdown.json
           grep --fixed-strings '"markdown":"# Hello"' /tmp/markdown.json
 
-          curl --fail --silent --show-error \
-            -H 'Host: admin.fetchharbor.example.com' \
-            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
-            http://127.0.0.1:8080/admin/api/overview \
-            | tee /tmp/admin.json
-          grep --fixed-strings '"service_count":3' /tmp/admin.json
-
-          status="$(curl --silent --output /tmp/x402-enable.json --write-out '%{http_code}' \
-            -H 'Host: admin.fetchharbor.example.com' \
-            -X PUT -H "X-Admin-Token: ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
-            --data '{"payment_mode":"x402"}' \
-            http://127.0.0.1:8080/admin/api/configuration)"
-          test "${status}" = '422'
-
-          curl --fail --silent --show-error \
-            -H 'Host: admin.fetchharbor.example.com' \
-            -H "X-Admin-Token: ${ADMIN_TOKEN}" \
-            http://127.0.0.1:8080/admin/api/security \
-            | tee /tmp/security.json
-          grep --fixed-strings '"status":"warning"' /tmp/security.json
+          test "$(curl --silent --output /tmp/public-admin.json --write-out '%{http_code}' \
+            http://127.0.0.1:8080/admin)" = '404'
 
       - name: Inspect running stack
         run: |
